@@ -102,7 +102,7 @@ export default function Auth() {
             <Shield className="h-12 w-12 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Safe Reach</h1>
+            <h1 className="text-4xl font-bold text-foreground mb-2">SafeReach</h1>
             <p className="text-lg text-muted-foreground">Walk safely. Stay connected.</p>
           </div>
           {!isSignUp && (
@@ -120,7 +120,7 @@ export default function Auth() {
               {isSignUp ? 'Create Account' : 'Welcome Back'}
             </CardTitle>
             <CardDescription>
-              {isSignUp ? 'Get started with Safe Reach' : 'Sign in to continue'}
+              {isSignUp ? 'Get started with SafeReach' : 'Sign in to continue'}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

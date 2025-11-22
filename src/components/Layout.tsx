@@ -25,7 +25,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2">
             <Shield className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">Safe Reach</span>
+            <span className="text-xl font-bold text-foreground">SafeReach</span>
           </Link>
           
           <Button
