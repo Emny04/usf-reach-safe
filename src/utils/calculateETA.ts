@@ -29,9 +29,16 @@ export const calculateTravelTime = async (
       destCoords = destination;
     }
 
-    // Use OSRM for pedestrian routing (foot mode)
+    // Use Mapbox walking directions API
+    const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+    
+    if (!mapboxToken) {
+      console.error('Mapbox token not configured');
+      return null;
+    }
+
     const response = await fetch(
-      `https://router.project-osrm.org/route/v1/foot/${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}?overview=false&steps=true`
+      `https://api.mapbox.com/directions/v5/mapbox/walking/${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}?geometries=geojson&overview=full&access_token=${mapboxToken}`
     );
     
     const data = await response.json();
