@@ -61,6 +61,7 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [routeDrawn, setRouteDrawn] = useState(false);
 
   // Get user's current location
   useEffect(() => {
@@ -104,6 +105,7 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
       map.on('click', async (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
         setMarkerPosition({ lat, lng });
+        setRouteDrawn(false);
         
         // Reverse geocode using Nominatim
         try {
@@ -188,7 +190,7 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
 
   // Add destination marker and route when position is set
   useEffect(() => {
-    if (!mapRef.current || !mapReady || !markerPosition) return;
+    if (!mapRef.current || !mapReady || !markerPosition || routeDrawn) return;
 
     try {
       // Remove old destination marker
@@ -203,20 +205,20 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
 
       // Draw route from start location (or current location) to destination
       const origin = startLocation || currentLocation;
-      if (origin) {
+      if (origin && !routeDrawn) {
         drawRoute(origin, markerPosition);
       }
     } catch (error) {
       console.error('Error adding destination marker:', error);
     }
-  }, [markerPosition, currentLocation, startLocation, mapReady]);
+  }, [markerPosition, currentLocation, startLocation, mapReady, routeDrawn]);
 
   // Draw route between two points
   const drawRoute = async (
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number }
   ) => {
-    if (!mapRef.current || !mapReady) return;
+    if (!mapRef.current || !mapReady || routeDrawn) return;
 
     try {
       // Remove old route
@@ -248,6 +250,9 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
         // Fit map to show both markers and route
         const bounds = L.latLngBounds(coordinates);
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+        
+        // Mark route as drawn to prevent re-rendering
+        setRouteDrawn(true);
       }
     } catch (error) {
       console.error('Error drawing route:', error);
