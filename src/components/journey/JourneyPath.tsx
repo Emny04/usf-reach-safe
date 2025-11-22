@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
+import 'leaflet-routing-machine';
 
 interface JourneyPathProps {
   map: L.Map;
@@ -9,11 +10,11 @@ interface JourneyPathProps {
 
 /**
  * JourneyPath - Displays the route from current location to destination
+ * Uses Leaflet Routing Machine with OSRM for realistic walking routes
  * Updates automatically as the user moves
- * Uses a simple straight line for now (can be upgraded to OSRM routing)
  */
 export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
-  const pathRef = useRef<L.Polyline | null>(null);
+  const routingControlRef = useRef<L.Routing.Control | null>(null);
   const destinationMarkerRef = useRef<L.Marker | null>(null);
 
   // Destination marker icon (red pin)
@@ -31,27 +32,35 @@ export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
   useEffect(() => {
     if (!map) return;
 
-    // Remove old path and marker
-    if (pathRef.current) {
-      pathRef.current.remove();
+    // Remove old routing control and marker
+    if (routingControlRef.current) {
+      map.removeControl(routingControlRef.current);
+      routingControlRef.current = null;
     }
     if (destinationMarkerRef.current) {
       destinationMarkerRef.current.remove();
+      destinationMarkerRef.current = null;
     }
 
-    // Draw straight line from start to destination
-    const coordinates: [number, number][] = [
-      [start.lat, start.lng],
-      [destination.lat, destination.lng],
-    ];
-
-    // Create polyline path
-    pathRef.current = L.polyline(coordinates, {
-      color: '#10b981', // Green color
-      weight: 4,
-      opacity: 0.7,
-      lineJoin: 'round',
-      dashArray: '10, 10', // Dashed line
+    // Create routing control with OSRM
+    routingControlRef.current = L.Routing.control({
+      waypoints: [
+        L.latLng(start.lat, start.lng),
+        L.latLng(destination.lat, destination.lng)
+      ],
+      router: L.Routing.osrmv1({
+        serviceUrl: 'https://router.project-osrm.org/route/v1',
+        profile: 'foot' // Walking route
+      }),
+      lineOptions: {
+        styles: [{ color: '#10b981', weight: 5, opacity: 0.7 }],
+        extendToWaypoints: false,
+        missingRouteTolerance: 0
+      },
+      addWaypoints: false,
+      show: false, // Hide the instruction panel
+      fitSelectedRoutes: true,
+      routeWhileDragging: false
     }).addTo(map);
 
     // Add destination marker
@@ -60,17 +69,15 @@ export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
       { icon: destinationIcon }
     ).addTo(map);
 
-    // Fit map to show both start and destination
-    const bounds = L.latLngBounds(coordinates);
-    map.fitBounds(bounds, { padding: [50, 50] });
-
     // Cleanup
     return () => {
-      if (pathRef.current) {
-        pathRef.current.remove();
+      if (routingControlRef.current) {
+        map.removeControl(routingControlRef.current);
+        routingControlRef.current = null;
       }
       if (destinationMarkerRef.current) {
         destinationMarkerRef.current.remove();
+        destinationMarkerRef.current = null;
       }
     };
   }, [map, start.lat, start.lng, destination.lat, destination.lng]);
