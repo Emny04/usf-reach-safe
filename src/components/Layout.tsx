@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, Users, MapPin, History, Settings, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import usfLogo from '@/assets/usf-logo.jpeg';
+import usfLogo from '@/assets/usf-bulls-logo.png';
 
 interface LayoutProps {
   children: ReactNode;
