@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield } from 'lucide-react';
+import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -225,6 +225,32 @@ export default function ActiveJourney() {
   const isActive = journey.status === 'active';
   const isAlert = journey.status === 'alert_triggered';
   const lastCheckIn = checkIns[0];
+  const trackingUrl = `${window.location.origin}/track/${id}`;
+
+  const copyTrackingLink = async () => {
+    try {
+      await navigator.clipboard.writeText(trackingUrl);
+      toast.success('Tracking link copied to clipboard!');
+    } catch (error) {
+      toast.error('Failed to copy link');
+    }
+  };
+
+  const shareTrackingLink = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Track My Journey - Safe Reach',
+          text: `I'm on my way. Track my journey here:`,
+          url: trackingUrl,
+        });
+      } catch (error) {
+        // User cancelled or error occurred
+      }
+    } else {
+      copyTrackingLink();
+    }
+  };
 
   return (
     <div className="space-y-6 pb-24">
@@ -237,6 +263,45 @@ export default function ActiveJourney() {
           {journey.status.replace('_', ' ').toUpperCase()}
         </Badge>
       </div>
+
+      {/* Shareable Tracking Link */}
+      <Card className="border-primary/50 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5" />
+            Share Journey Status
+          </CardTitle>
+          <CardDescription>
+            Share this link with anyone to let them track your journey in real-time
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={trackingUrl}
+              readOnly
+              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={copyTrackingLink}
+              className="shrink-0"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button
+            onClick={shareTrackingLink}
+            variant="default"
+            className="w-full"
+          >
+            <Share2 className="mr-2 h-4 w-4" />
+            Share Link
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Journey Details */}
       <Card className={isAlert ? 'border-destructive/50 bg-destructive/5' : ''}>

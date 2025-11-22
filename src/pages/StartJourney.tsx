@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { MapPin, Navigation, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMinutes } from 'date-fns';
@@ -243,12 +244,12 @@ export default function StartJourney() {
             {startType === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="startCustom">Address</Label>
-                <Input
+                <AddressAutocomplete
                   id="startCustom"
                   value={startCustom}
-                  onChange={(e) => setStartCustom(e.target.value)}
-                  placeholder="Enter address or landmark"
-                  required
+                  onChange={(address) => setStartCustom(address)}
+                  placeholder="Start typing an address..."
+                  className="h-12"
                 />
               </div>
             )}
@@ -298,12 +299,12 @@ export default function StartJourney() {
             {destType === 'custom' && (
               <div className="space-y-2">
                 <Label htmlFor="destCustom">Address</Label>
-                <Input
+                <AddressAutocomplete
                   id="destCustom"
                   value={destCustom}
-                  onChange={(e) => setDestCustom(e.target.value)}
-                  placeholder="Enter address or landmark"
-                  required
+                  onChange={(address) => setDestCustom(address)}
+                  placeholder="Where are you going..."
+                  className="h-12"
                 />
               </div>
             )}
@@ -364,7 +365,7 @@ export default function StartJourney() {
           </CardContent>
         </Card>
 
-        <Button type="submit" className="w-full" size="lg" disabled={loading}>
+        <Button type="submit" className="w-full h-12 text-base font-semibold" size="lg" disabled={loading}>
           {loading ? 'Starting Journey...' : 'Start Journey'}
         </Button>
       </form>

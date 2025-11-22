@@ -85,19 +85,37 @@ export default function Auth() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
-            <Shield className="h-10 w-10 text-primary-foreground" />
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10 px-4 py-8">
+      <div className="w-full max-w-md space-y-6">
+        {/* Hero Section */}
+        <div className="text-center space-y-4">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary shadow-lg">
+            <Shield className="h-12 w-12 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl font-bold">Safe Reach</CardTitle>
-          <CardDescription>
-            {isSignUp ? 'Create your account to get started' : 'Sign in to your account'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Safe Reach</h1>
+            <p className="text-lg text-muted-foreground">Walk safely. Stay connected.</p>
+          </div>
+          {!isSignUp && (
+            <div className="bg-card/50 backdrop-blur rounded-lg p-4 text-left space-y-2">
+              <p className="text-sm text-foreground font-medium">✓ Share your journey in real-time</p>
+              <p className="text-sm text-foreground font-medium">✓ Automatic safety check-ins</p>
+              <p className="text-sm text-foreground font-medium">✓ Emergency alerts to your contacts</p>
+            </div>
+          )}
+        </div>
+
+        <Card className="shadow-xl">
+          <CardHeader className="space-y-1 text-center pb-4">
+            <CardTitle className="text-xl font-bold">
+              {isSignUp ? 'Create Account' : 'Welcome Back'}
+            </CardTitle>
+            <CardDescription>
+              {isSignUp ? 'Get started with Safe Reach' : 'Sign in to continue'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <>
                 <div className="space-y-2">
@@ -152,40 +170,41 @@ export default function Auth() {
 
             <Button
               type="submit"
-              className="w-full"
+              className="w-full h-12 text-base font-semibold"
               disabled={loading}
             >
               {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-6 text-center">
             {isSignUp ? (
-              <>
+              <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <button
                   type="button"
                   onClick={() => setIsSignUp(false)}
-                  className="font-medium text-primary hover:underline"
+                  className="font-semibold text-primary hover:underline"
                 >
                   Sign in
                 </button>
-              </>
+              </p>
             ) : (
-              <>
+              <p className="text-sm text-muted-foreground">
                 Don't have an account?{' '}
                 <button
                   type="button"
                   onClick={() => setIsSignUp(true)}
-                  className="font-medium text-primary hover:underline"
+                  className="font-semibold text-primary hover:underline"
                 >
                   Sign up
                 </button>
-              </>
+              </p>
             )}
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
