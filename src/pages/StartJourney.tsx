@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { MapPicker } from '@/components/MapPicker';
 import { MapPin, Navigation, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMinutes } from 'date-fns';
@@ -36,9 +37,10 @@ export default function StartJourney() {
   const [startType, setStartType] = useState<'current' | 'place' | 'custom'>('current');
   const [startPlaceId, setStartPlaceId] = useState('');
   const [startCustom, setStartCustom] = useState('');
-  const [destType, setDestType] = useState<'place' | 'custom'>('place');
+  const [destType, setDestType] = useState<'place' | 'custom' | 'map'>('place');
   const [destPlaceId, setDestPlaceId] = useState('');
   const [destCustom, setDestCustom] = useState('');
+  const [destMapAddress, setDestMapAddress] = useState('');
   const [duration, setDuration] = useState('20');
 
   useEffect(() => {
@@ -129,6 +131,9 @@ export default function StartJourney() {
     } else if (destType === 'custom' && destCustom) {
       destName = destCustom;
       destAddress = destCustom;
+    } else if (destType === 'map' && destMapAddress) {
+      destName = destMapAddress;
+      destAddress = destMapAddress;
     }
 
     if (!startName || !destName) {
@@ -274,6 +279,7 @@ export default function StartJourney() {
                 <SelectContent>
                   <SelectItem value="place">Saved Place</SelectItem>
                   <SelectItem value="custom">Custom Address</SelectItem>
+                  <SelectItem value="map">Pick on Map</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -306,6 +312,20 @@ export default function StartJourney() {
                   placeholder="Where are you going..."
                   className="h-12"
                 />
+              </div>
+            )}
+
+            {destType === 'map' && (
+              <div className="space-y-2">
+                <MapPicker
+                  onLocationSelect={(address) => setDestMapAddress(address)}
+                />
+                {destMapAddress && (
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm font-medium">Selected location:</p>
+                    <p className="text-sm text-muted-foreground">{destMapAddress}</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
