@@ -2,18 +2,29 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Fix default marker icon
+// Fix default marker icon (red pin for destination)
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-const DefaultIcon = L.icon({
+const DestinationIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
 
-L.Marker.prototype.options.icon = DefaultIcon;
+// Green icon for starting point
+const StartIcon = L.icon({
+  iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 41">
+      <path fill="#10b981" stroke="#fff" stroke-width="1" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 8.4 12.5 28.5 12.5 28.5S25 20.9 25 12.5C25 5.6 19.4 0 12.5 0z"/>
+      <circle cx="12.5" cy="12.5" r="6" fill="#fff"/>
+    </svg>
+  `),
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
 
 // Custom blue dot icon for current location
 const CurrentLocationIcon = L.divIcon({
@@ -30,17 +41,21 @@ const CurrentLocationIcon = L.divIcon({
   iconAnchor: [10, 10],
 });
 
+L.Marker.prototype.options.icon = DestinationIcon;
+
 interface MapPickerProps {
   onLocationSelect: (address: string, lat: number, lng: number) => void;
+  startLocation?: { lat: number; lng: number } | null;
   initialCenter?: { lat: number; lng: number };
 }
 
 const defaultCenter = { lat: 28.0587, lng: -82.4139 }; // USF Tampa campus
 
-export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) => {
+export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: MapPickerProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const destinationMarkerRef = useRef<L.Marker | null>(null);
+  const startMarkerRef = useRef<L.Marker | null>(null);
   const currentLocationMarkerRef = useRef<L.Marker | null>(null);
   const routeLineRef = useRef<L.Polyline | null>(null);
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -116,9 +131,9 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
     }
   }, []);
 
-  // Add current location marker when map is ready
+  // Add current location marker when map is ready (only if no startLocation provided)
   useEffect(() => {
-    if (!mapRef.current || !mapReady || !currentLocation) return;
+    if (!mapRef.current || !mapReady || !currentLocation || startLocation) return;
 
     // Remove old marker
     if (currentLocationMarkerRef.current) {
@@ -139,7 +154,37 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
     } catch (error) {
       console.error('Error adding current location marker:', error);
     }
-  }, [currentLocation, mapReady, markerPosition]);
+  }, [currentLocation, mapReady, markerPosition, startLocation]);
+
+  // Add starting point marker when provided
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !startLocation) return;
+
+    // Remove old start marker
+    if (startMarkerRef.current) {
+      startMarkerRef.current.remove();
+    }
+
+    // Remove current location marker if showing start location instead
+    if (currentLocationMarkerRef.current) {
+      currentLocationMarkerRef.current.remove();
+    }
+
+    try {
+      // Add green starting point marker
+      startMarkerRef.current = L.marker(
+        [startLocation.lat, startLocation.lng],
+        { icon: StartIcon }
+      ).addTo(mapRef.current);
+
+      // Center on start location if no destination set
+      if (!markerPosition) {
+        mapRef.current.setView([startLocation.lat, startLocation.lng], 15);
+      }
+    } catch (error) {
+      console.error('Error adding start marker:', error);
+    }
+  }, [startLocation, mapReady, markerPosition]);
 
   // Add destination marker and route when position is set
   useEffect(() => {
@@ -151,18 +196,20 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
         destinationMarkerRef.current.remove();
       }
 
-      // Add new destination marker
-      destinationMarkerRef.current = L.marker([markerPosition.lat, markerPosition.lng])
-        .addTo(mapRef.current);
+      // Add new destination marker (red)
+      destinationMarkerRef.current = L.marker([markerPosition.lat, markerPosition.lng], {
+        icon: DestinationIcon
+      }).addTo(mapRef.current);
 
-      // Draw route if we have current location
-      if (currentLocation) {
-        drawRoute(currentLocation, markerPosition);
+      // Draw route from start location (or current location) to destination
+      const origin = startLocation || currentLocation;
+      if (origin) {
+        drawRoute(origin, markerPosition);
       }
     } catch (error) {
       console.error('Error adding destination marker:', error);
     }
-  }, [markerPosition, currentLocation, mapReady]);
+  }, [markerPosition, currentLocation, startLocation, mapReady]);
 
   // Draw route between two points
   const drawRoute = async (
@@ -214,7 +261,14 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
         style={{ height: '400px', width: '100%', borderRadius: '0.5rem' }}
       />
       <p className="text-sm text-muted-foreground mt-2">
-        {currentLocation ? (
+        {startLocation ? (
+          <>
+            <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-2 align-middle"></span>
+            <span className="font-medium">Green pin</span> = Starting point • 
+            <span className="inline-block w-3 h-3 bg-red-500 rounded-full mx-2 align-middle"></span>
+            <span className="font-medium">Red pin</span> = Destination
+          </>
+        ) : currentLocation ? (
           <>
             <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2 align-middle"></span>
             Your location is shown in blue. Click anywhere to set your destination and see the walking route.
