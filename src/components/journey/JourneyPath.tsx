@@ -42,15 +42,14 @@ export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
       destinationMarkerRef.current = null;
     }
 
-    // Create routing control with OSRM
+    // Create routing control with OSRM foot profile for walking paths
     routingControlRef.current = L.Routing.control({
       waypoints: [
         L.latLng(start.lat, start.lng),
         L.latLng(destination.lat, destination.lng)
       ],
       router: L.Routing.osrmv1({
-        serviceUrl: 'https://router.project-osrm.org/route/v1',
-        profile: 'foot' // Walking route
+        serviceUrl: 'https://router.project-osrm.org/route/v1/foot' // Explicit foot profile in URL
       }),
       lineOptions: {
         styles: [{ color: '#10b981', weight: 5, opacity: 0.7 }],
