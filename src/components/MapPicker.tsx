@@ -213,7 +213,7 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
     }
   }, [markerPosition, currentLocation, startLocation, mapReady, routeDrawn]);
 
-  // Draw route between two points using Mapbox walking directions
+  // Draw route between two points
   const drawRoute = async (
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number }
@@ -221,104 +221,41 @@ export const MapPicker = ({ onLocationSelect, startLocation, initialCenter }: Ma
     if (!mapRef.current || !mapReady || routeDrawn) return;
 
     try {
-      // Remove old route polyline before drawing a new one
+      // Remove old route
       if (routeLineRef.current) {
-        mapRef.current.removeLayer(routeLineRef.current);
-        routeLineRef.current = null;
+        routeLineRef.current.remove();
       }
 
-      const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-
-      // If Mapbox token is missing, fall back to a straight line
-      if (!mapboxToken) {
-        console.error('Mapbox token not configured, using fallback straight route');
-        const fallbackCoords: [number, number][] = [
-          [origin.lat, origin.lng],
-          [destination.lat, destination.lng],
-        ];
-
-        routeLineRef.current = L.polyline(fallbackCoords, {
-          color: '#00a86b',
-          weight: 5,
-          opacity: 0.8,
-        }).addTo(mapRef.current);
-
-        mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-          padding: [50, 50],
-        });
-
-        setRouteDrawn(true);
-        return;
-      }
-
-      // Mapbox walking directions endpoint (must include "mapbox/walking")
-      const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?geometries=geojson&overview=full&access_token=${mapboxToken}`;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.error('Mapbox Directions error:', response.status, response.statusText);
-      }
-
+      // Get route from OSRM
+      const response = await fetch(
+        `https://router.project-osrm.org/route/v1/foot/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`
+      );
+      
       const data = await response.json();
-
+      
       if (data.routes && data.routes[0] && data.routes[0].geometry) {
-        // Parse GeoJSON geometry into [lat, lng] pairs
-        const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
-          (c: number[]) => [c[1], c[0]] as [number, number]
+        const route = data.routes[0];
+        const coordinates: [number, number][] = route.geometry.coordinates.map(
+          (coord: number[]) => [coord[1], coord[0]] as [number, number]
         );
-
-        routeLineRef.current = L.polyline(coords, {
-          color: '#00a86b',
-          weight: 5,
-          opacity: 0.8,
+        
+        // Draw route line
+        routeLineRef.current = L.polyline(coordinates, {
+          color: '#10b981',
+          weight: 4,
+          opacity: 0.7,
+          lineJoin: 'round'
         }).addTo(mapRef.current);
-
-        // Fit bounds to only this walking route
-        mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-          padding: [50, 50],
-        });
-
-        setRouteDrawn(true);
-      } else {
-        console.warn('No walking route returned from Mapbox, using fallback');
-        const fallbackCoords: [number, number][] = [
-          [origin.lat, origin.lng],
-          [destination.lat, destination.lng],
-        ];
-
-        routeLineRef.current = L.polyline(fallbackCoords, {
-          color: '#00a86b',
-          weight: 5,
-          opacity: 0.8,
-        }).addTo(mapRef.current);
-
-        mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-          padding: [50, 50],
-        });
-
+        
+        // Fit map to show both markers and route
+        const bounds = L.latLngBounds(coordinates);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+        
+        // Mark route as drawn to prevent re-rendering
         setRouteDrawn(true);
       }
     } catch (error) {
-      console.error('Error drawing walking route, using fallback:', error);
-
-      if (mapRef.current) {
-        const fallbackCoords: [number, number][] = [
-          [origin.lat, origin.lng],
-          [destination.lat, destination.lng],
-        ];
-
-        routeLineRef.current = L.polyline(fallbackCoords, {
-          color: '#00a86b',
-          weight: 5,
-          opacity: 0.8,
-        }).addTo(mapRef.current);
-
-        mapRef.current.fitBounds(routeLineRef.current.getBounds(), {
-          padding: [50, 50],
-        });
-
-        setRouteDrawn(true);
-      }
+      console.error('Error drawing route:', error);
     }
   };
 

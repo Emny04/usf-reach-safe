@@ -7,23 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy } from 'lucide-react';
+import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { MapContainer } from '@/components/journey/MapContainer';
-import { JourneyControls } from '@/components/journey/JourneyControls';
 
 interface Journey {
   id: string;
   start_name: string;
-  start_address: string;
   dest_name: string;
-  dest_address: string;
   eta_time: string;
   status: string;
   start_time: string;
-  current_latitude: number | null;
-  current_longitude: number | null;
 }
 
 interface Contact {
@@ -186,55 +180,6 @@ export default function ActiveJourney() {
     }
   };
 
-  // Calculate remaining distance (Haversine formula)
-  const calculateDistance = (
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ): number => {
-    const R = 6371e3; // Earth's radius in meters
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
-  };
-
-  // Get destination coordinates by geocoding
-  const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
-
-  useEffect(() => {
-    const geocodeDestination = async () => {
-      if (!journey?.dest_address) return;
-
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            journey.dest_address
-          )}&limit=1`
-        );
-        const data = await response.json();
-        if (data[0]) {
-          setDestCoords({
-            lat: parseFloat(data[0].lat),
-            lng: parseFloat(data[0].lon),
-          });
-        }
-      } catch (error) {
-        console.error('Geocoding error:', error);
-      }
-    };
-
-    geocodeDestination();
-  }, [journey?.dest_address]);
-
   const handleNotSafe = async () => {
     if (!confirm('This will send an ALERT to all your contacts. Are you sure?')) return;
 
@@ -311,17 +256,8 @@ export default function ActiveJourney() {
     }
   };
 
-  // Calculate remaining distance
-  const remainingDistance =
-    location && destCoords
-      ? calculateDistance(location.latitude, location.longitude, destCoords.lat, destCoords.lng)
-      : 0;
-
-  // Placeholder: unsafe zones count (replace with real logic later)
-  const unsafeZones = 0;
-
   return (
-    <div className="space-y-6 pb-64">
+    <div className="space-y-6 pb-24">
       <div>
         <h1 className="text-3xl font-bold">Journey Status</h1>
         <Badge
@@ -332,26 +268,37 @@ export default function ActiveJourney() {
         </Badge>
       </div>
 
-      {/* Live Map with Location & Path */}
-      {isActive && destCoords && location && (
-        <MapContainer
-          destination={destCoords}
-          currentLocation={{
-            lat: location.latitude,
-            lng: location.longitude,
-          }}
-          onEmergency={handleNotSafe}
-        />
-      )}
-
-      {/* Journey Controls - only show when journey is active */}
-      {isActive && journey.eta_time && destCoords && location && (
-        <JourneyControls
-          remainingDistance={remainingDistance}
-          estimatedArrival={journey.eta_time}
-          unsafeZones={unsafeZones}
-          onEndJourney={handleArrivedSafely}
-        />
+      {/* Live Location Status */}
+      {isActive && (
+        <Card className="border-success/50 bg-success/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-success" />
+              Live Location Tracking
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {location ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Active</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your location is being shared with your contacts in real-time
+                </p>
+              </div>
+            ) : locationError ? (
+              <div className="text-sm text-destructive">
+                Location tracking unavailable. Please enable location permissions.
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Acquiring location...
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Shareable Tracking Link */}
@@ -467,17 +414,28 @@ export default function ActiveJourney() {
         </Card>
       )}
 
-      {/* Manual Emergency Button (for non-active journeys or as backup) */}
-      {!isActive && (
-        <Button
-          onClick={handleNotSafe}
-          variant="destructive"
-          size="lg"
-          className="w-full"
-        >
-          <AlertTriangle className="mr-2 h-5 w-5" />
-          Send Emergency Alert
-        </Button>
+      {/* Action Buttons */}
+      {isActive && (
+        <div className="space-y-3">
+          <Button
+            onClick={handleArrivedSafely}
+            variant="success"
+            size="lg"
+            className="w-full"
+          >
+            <CheckCircle className="mr-2 h-5 w-5" />
+            I Arrived Safely
+          </Button>
+          <Button
+            onClick={handleNotSafe}
+            variant="destructive"
+            size="lg"
+            className="w-full"
+          >
+            <AlertTriangle className="mr-2 h-5 w-5" />
+            I'm Not Safe
+          </Button>
+        </div>
       )}
 
       {/* Check-in Dialog */}
