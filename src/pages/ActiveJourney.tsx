@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+import RouteSteps from '@/components/RouteSteps';
 
 interface Journey {
   id: string;
@@ -31,6 +32,15 @@ interface CheckIn {
   timestamp: string;
 }
 
+interface RouteStep {
+  step_number: number;
+  instruction: string;
+  distance: number;
+  duration: number;
+  maneuver_type?: string;
+  maneuver_modifier?: string;
+}
+
 export default function ActiveJourney() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -38,6 +48,7 @@ export default function ActiveJourney() {
   const [journey, setJourney] = useState<Journey | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCheckInDialog, setShowCheckInDialog] = useState(false);
   const [checkInTimer, setCheckInTimer] = useState<NodeJS.Timeout | null>(null);
@@ -102,6 +113,17 @@ export default function ActiveJourney() {
 
       if (checkInsData) {
         setCheckIns(checkInsData);
+      }
+
+      // Fetch route steps
+      const { data: stepsData } = await supabase
+        .from('journey_steps')
+        .select('*')
+        .eq('journey_id', id)
+        .order('step_number', { ascending: true });
+
+      if (stepsData) {
+        setRouteSteps(stepsData);
       }
     } catch (error) {
       console.error('Error fetching journey data:', error);
@@ -387,6 +409,9 @@ export default function ActiveJourney() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Route Steps */}
+      {routeSteps.length > 0 && <RouteSteps steps={routeSteps} />}
 
       {/* Last Check-in */}
       {lastCheckIn && (

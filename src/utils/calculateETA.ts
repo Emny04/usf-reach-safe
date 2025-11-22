@@ -1,7 +1,15 @@
+interface RouteStep {
+  instruction: string;
+  distance: number;
+  duration: number;
+  maneuver_type?: string;
+  maneuver_modifier?: string;
+}
+
 export const calculateTravelTime = async (
   origin: string | { lat: number; lng: number },
   destination: string | { lat: number; lng: number }
-): Promise<{ duration: number; distance: number } | null> => {
+): Promise<{ duration: number; distance: number; steps: RouteStep[] } | null> => {
   try {
     // Convert addresses to coordinates if needed
     let originCoords: { lat: number; lng: number };
@@ -46,9 +54,45 @@ export const calculateTravelTime = async (
       const durationInSeconds = distanceInMeters / walkingSpeedMps;
       const durationInMinutes = Math.ceil(durationInSeconds / 60);
       
+      // Extract turn-by-turn steps from OSRM response
+      const steps: RouteStep[] = [];
+      if (route.legs && route.legs[0] && route.legs[0].steps) {
+        route.legs[0].steps.forEach((step: any, index: number) => {
+          const maneuver = step.maneuver;
+          let instruction = '';
+          
+          // Generate human-readable instruction
+          if (maneuver.type === 'depart') {
+            instruction = `Start on ${step.name || 'the path'}`;
+          } else if (maneuver.type === 'arrive') {
+            instruction = 'Arrive at destination';
+          } else if (maneuver.type === 'turn') {
+            const modifier = maneuver.modifier || '';
+            instruction = `Turn ${modifier} onto ${step.name || 'the path'}`;
+          } else if (maneuver.type === 'end of road') {
+            instruction = `At the end of the road, turn ${maneuver.modifier || ''} onto ${step.name || 'the path'}`;
+          } else if (maneuver.type === 'fork') {
+            instruction = `At the fork, keep ${maneuver.modifier || ''} onto ${step.name || 'the path'}`;
+          } else if (maneuver.type === 'continue') {
+            instruction = `Continue on ${step.name || 'the path'}`;
+          } else {
+            instruction = `${maneuver.type} ${maneuver.modifier || ''} ${step.name ? 'onto ' + step.name : ''}`.trim();
+          }
+          
+          steps.push({
+            instruction,
+            distance: step.distance,
+            duration: step.duration,
+            maneuver_type: maneuver.type,
+            maneuver_modifier: maneuver.modifier,
+          });
+        });
+      }
+      
       return {
         duration: durationInMinutes,
         distance: distanceInMeters,
+        steps,
       };
     }
     

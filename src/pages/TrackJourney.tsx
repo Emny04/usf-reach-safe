@@ -9,6 +9,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { calculateTotalDistance, formatDistance, formatSpeed } from '@/utils/calculateDistance';
 import { formatDistanceToNow } from 'date-fns';
+import RouteSteps from '@/components/RouteSteps';
 
 interface JourneyData {
   id: string;
@@ -45,12 +46,22 @@ interface LocationPoint {
   timestamp: string;
 }
 
+interface RouteStep {
+  step_number: number;
+  instruction: string;
+  distance: number;
+  duration: number;
+  maneuver_type?: string;
+  maneuver_modifier?: string;
+}
+
 export default function TrackJourney() {
   const { id } = useParams<{ id: string }>();
   const [journey, setJourney] = useState<JourneyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 28.0587, lng: -82.4139 });
   const [locationHistory, setLocationHistory] = useState<LocationPoint[]>([]);
+  const [routeSteps, setRouteSteps] = useState<RouteStep[]>([]);
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -233,6 +244,17 @@ export default function TrackJourney() {
 
       if (locationsData) {
         setLocationHistory(locationsData);
+      }
+
+      // Fetch route steps
+      const { data: stepsData } = await supabase
+        .from('journey_steps')
+        .select('*')
+        .eq('journey_id', id)
+        .order('step_number', { ascending: true });
+
+      if (stepsData) {
+        setRouteSteps(stepsData);
       }
       
       // Use current location if available, otherwise geocode destination
@@ -494,6 +516,9 @@ export default function TrackJourney() {
             </ul>
           </CardContent>
         </Card>
+
+        {/* Route Steps */}
+        {routeSteps.length > 0 && <RouteSteps steps={routeSteps} />}
       </div>
     </div>
   );

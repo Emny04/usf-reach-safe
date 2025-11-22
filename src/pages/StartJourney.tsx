@@ -46,6 +46,13 @@ export default function StartJourney() {
   const [destMapAddress, setDestMapAddress] = useState('');
   const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [calculatedDuration, setCalculatedDuration] = useState<number | null>(null);
+  const [routeSteps, setRouteSteps] = useState<Array<{
+    instruction: string;
+    distance: number;
+    duration: number;
+    maneuver_type?: string;
+    maneuver_modifier?: string;
+  }>>([]);
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [calculatingETA, setCalculatingETA] = useState(false);
 
@@ -125,6 +132,7 @@ export default function StartJourney() {
       if (result) {
         setCalculatedDuration(result.duration);
         setCalculatedDistance(result.distance);
+        setRouteSteps(result.steps);
         const distanceInMiles = (result.distance * 0.000621371).toFixed(2);
         toast.success(`Route calculated: ${result.duration} min walk • ${distanceInMiles} mi`);
       } else {
@@ -320,6 +328,21 @@ export default function StartJourney() {
       }));
 
       await supabase.from('notifications_log').insert(notificationInserts);
+
+      // Save route steps if available
+      if (routeSteps.length > 0) {
+        const stepsInserts = routeSteps.map((step, index) => ({
+          journey_id: journeyData.id,
+          step_number: index + 1,
+          instruction: step.instruction,
+          distance: step.distance,
+          duration: step.duration,
+          maneuver_type: step.maneuver_type,
+          maneuver_modifier: step.maneuver_modifier,
+        }));
+
+        await supabase.from('journey_steps').insert(stepsInserts);
+      }
 
       toast.success('Journey started! Your contacts have been notified.');
       navigate(`/journey/${journeyData.id}`);
