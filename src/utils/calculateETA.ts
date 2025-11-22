@@ -3,20 +3,43 @@ export const calculateTravelTime = async (
   destination: string | { lat: number; lng: number }
 ): Promise<{ duration: number; distance: number } | null> => {
   try {
-    const service = new google.maps.DistanceMatrixService();
-    
-    const result = await service.getDistanceMatrix({
-      origins: [origin],
-      destinations: [destination],
-      travelMode: google.maps.TravelMode.WALKING,
-      unitSystem: google.maps.UnitSystem.IMPERIAL,
-    });
+    // Convert addresses to coordinates if needed
+    let originCoords: { lat: number; lng: number };
+    let destCoords: { lat: number; lng: number };
 
-    if (result.rows[0]?.elements[0]?.status === 'OK') {
-      const element = result.rows[0].elements[0];
+    if (typeof origin === 'string') {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(origin)}&limit=1`
+      );
+      const data = await response.json();
+      if (!data[0]) return null;
+      originCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    } else {
+      originCoords = origin;
+    }
+
+    if (typeof destination === 'string') {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destination)}&limit=1`
+      );
+      const data = await response.json();
+      if (!data[0]) return null;
+      destCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    } else {
+      destCoords = destination;
+    }
+
+    // Use OSRM for routing (walking mode)
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/foot/${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}?overview=false`
+    );
+    
+    const data = await response.json();
+    
+    if (data.routes && data.routes[0]) {
       return {
-        duration: Math.ceil(element.duration.value / 60), // Convert seconds to minutes
-        distance: element.distance.value, // meters
+        duration: Math.ceil(data.routes[0].duration / 60), // Convert seconds to minutes
+        distance: data.routes[0].distance, // meters
       };
     }
     
