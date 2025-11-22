@@ -49,19 +49,28 @@ export default function TrackJourney() {
   useEffect(() => {
     fetchJourney();
     
-    // Subscribe to journey updates
+    // Subscribe to journey updates for real-time location tracking
     const channel = supabase
       .channel(`public-journey-${id}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'journeys',
           filter: `id=eq.${id}`,
         },
-        () => {
-          fetchJourney();
+        (payload) => {
+          const newData = payload.new as any;
+          setJourney((prev) => {
+            if (!prev) return prev;
+            return { ...prev, ...newData };
+          });
+          
+          // Update map center if location changed
+          if (newData.current_latitude && newData.current_longitude) {
+            setMapCenter({ lat: newData.current_latitude, lng: newData.current_longitude });
+          }
         }
       )
       .subscribe();
@@ -73,7 +82,7 @@ export default function TrackJourney() {
 
   // Initialize and update map
   useEffect(() => {
-    if (!mapContainerRef.current || !journey) return;
+    if (!mapContainerRef.current) return;
 
     // Initialize map if not already created
     if (!mapRef.current) {
@@ -84,26 +93,50 @@ export default function TrackJourney() {
       }).addTo(mapRef.current);
     }
 
-    // Update map center and marker
-    if (mapRef.current) {
-      mapRef.current.setView([mapCenter.lat, mapCenter.lng], 15);
-      
-      // Remove old marker
-      if (markerRef.current) {
-        markerRef.current.remove();
-      }
-      
-      // Add new marker
-      markerRef.current = L.marker([mapCenter.lat, mapCenter.lng]).addTo(mapRef.current);
-    }
-
     return () => {
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
-  }, [mapCenter, journey]);
+  }, []);
+
+  // Update map center and marker when location changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    mapRef.current.setView([mapCenter.lat, mapCenter.lng], 15);
+    
+    // Remove old marker
+    if (markerRef.current) {
+      markerRef.current.remove();
+    }
+    
+    // Add new marker with custom color for live tracking
+    const isLiveTracking = journey?.current_latitude && journey?.current_longitude;
+    const icon = L.divIcon({
+      className: 'custom-marker',
+      html: `<div style="
+        background-color: ${isLiveTracking ? '#22c55e' : '#ef4444'};
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        ${isLiveTracking ? 'animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;' : ''}
+      "></div>
+      <style>
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      </style>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    
+    markerRef.current = L.marker([mapCenter.lat, mapCenter.lng], { icon }).addTo(mapRef.current);
+  }, [mapCenter, journey?.current_latitude, journey?.current_longitude]);
 
   const fetchJourney = async () => {
     try {
@@ -272,12 +305,23 @@ export default function TrackJourney() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              {journey.current_latitude ? 'Current Location' : 'Destination'}
+              {journey.current_latitude ? 'Live Location' : 'Destination'}
             </CardTitle>
-            {journey.location_updated_at && (
-              <CardDescription>
-                Updated {new Date(journey.location_updated_at).toLocaleString()}
+            {journey.current_latitude && journey.current_longitude ? (
+              <CardDescription className="flex items-center gap-2">
+                <span className="flex h-2 w-2">
+                  <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-success opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
+                </span>
+                Live tracking active
+                {journey.location_updated_at && (
+                  <span className="text-muted-foreground">
+                    • Updated {new Date(journey.location_updated_at).toLocaleTimeString()}
+                  </span>
+                )}
               </CardDescription>
+            ) : (
+              <CardDescription>Showing destination - live tracking not started</CardDescription>
             )}
           </CardHeader>
           <CardContent className="p-0">
