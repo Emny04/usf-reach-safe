@@ -13,14 +13,22 @@ const DefaultIcon = L.icon({
   iconAnchor: [12, 41],
 });
 
-const CurrentLocationIcon = L.divIcon({
-  className: 'custom-current-location-marker',
-  html: '<div style="background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);"></div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-});
-
 L.Marker.prototype.options.icon = DefaultIcon;
+
+// Custom blue dot icon for current location
+const CurrentLocationIcon = L.divIcon({
+  className: 'custom-location-marker',
+  html: `<div style="
+    background-color: #3b82f6;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  "></div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
 
 interface MapPickerProps {
   onLocationSelect: (address: string, lat: number, lng: number) => void;
@@ -37,6 +45,7 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
   const routeLineRef = useRef<L.Polyline | null>(null);
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   // Get user's current location
   useEffect(() => {
@@ -55,72 +64,115 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
     }
   }, []);
 
-  // Initialize map
+  // Initialize map once
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     const center = currentLocation || initialCenter || defaultCenter;
     
-    // Initialize map
-    const map = L.map(mapContainerRef.current).setView([center.lat, center.lng], 15);
-    
-    // Add tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+    try {
+      // Initialize map
+      const map = L.map(mapContainerRef.current).setView([center.lat, center.lng], 15);
+      
+      // Add tile layer
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(map);
 
-    // Handle map clicks
-    map.on('click', async (e: L.LeafletMouseEvent) => {
-      const { lat, lng } = e.latlng;
-      
-      // Update marker position state
-      setMarkerPosition({ lat, lng });
-      
-      // Remove old destination marker if exists
+      // Wait for map to be ready
+      map.whenReady(() => {
+        setMapReady(true);
+      });
+
+      // Handle map clicks
+      map.on('click', async (e: L.LeafletMouseEvent) => {
+        const { lat, lng } = e.latlng;
+        setMarkerPosition({ lat, lng });
+        
+        // Reverse geocode using Nominatim
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+          );
+          const data = await response.json();
+          onLocationSelect(data.display_name || 'Unknown location', lat, lng);
+        } catch (error) {
+          console.error('Geocoding error:', error);
+          onLocationSelect('Unknown location', lat, lng);
+        }
+      });
+
+      mapRef.current = map;
+
+      // Cleanup
+      return () => {
+        map.remove();
+        mapRef.current = null;
+        setMapReady(false);
+      };
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
+  }, []);
+
+  // Add current location marker when map is ready
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !currentLocation) return;
+
+    // Remove old marker
+    if (currentLocationMarkerRef.current) {
+      currentLocationMarkerRef.current.remove();
+    }
+
+    // Add new marker
+    try {
+      currentLocationMarkerRef.current = L.marker(
+        [currentLocation.lat, currentLocation.lng],
+        { icon: CurrentLocationIcon }
+      ).addTo(mapRef.current);
+
+      // Center on location if no destination set
+      if (!markerPosition) {
+        mapRef.current.setView([currentLocation.lat, currentLocation.lng], 15);
+      }
+    } catch (error) {
+      console.error('Error adding current location marker:', error);
+    }
+  }, [currentLocation, mapReady, markerPosition]);
+
+  // Add destination marker and route when position is set
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !markerPosition) return;
+
+    try {
+      // Remove old destination marker
       if (destinationMarkerRef.current) {
         destinationMarkerRef.current.remove();
       }
-      
+
       // Add new destination marker
-      destinationMarkerRef.current = L.marker([lat, lng]).addTo(map);
-      
+      destinationMarkerRef.current = L.marker([markerPosition.lat, markerPosition.lng])
+        .addTo(mapRef.current);
+
       // Draw route if we have current location
       if (currentLocation) {
-        drawRoute(map, currentLocation, { lat, lng });
+        drawRoute(currentLocation, markerPosition);
       }
-      
-      // Reverse geocode using Nominatim
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-        );
-        const data = await response.json();
-        onLocationSelect(data.display_name || 'Unknown location', lat, lng);
-      } catch (error) {
-        console.error('Geocoding error:', error);
-        onLocationSelect('Unknown location', lat, lng);
-      }
-    });
-
-    mapRef.current = map;
-
-    // Cleanup
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, [currentLocation, initialCenter, onLocationSelect]);
+    } catch (error) {
+      console.error('Error adding destination marker:', error);
+    }
+  }, [markerPosition, currentLocation, mapReady]);
 
   // Draw route between two points
   const drawRoute = async (
-    map: L.Map,
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number }
   ) => {
+    if (!mapRef.current || !mapReady) return;
+
     try {
-      // Remove old route if exists
+      // Remove old route
       if (routeLineRef.current) {
         routeLineRef.current.remove();
       }
@@ -132,9 +184,11 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
       
       const data = await response.json();
       
-      if (data.routes && data.routes[0]) {
+      if (data.routes && data.routes[0] && data.routes[0].geometry) {
         const route = data.routes[0];
-        const coordinates = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+        const coordinates: [number, number][] = route.geometry.coordinates.map(
+          (coord: number[]) => [coord[1], coord[0]] as [number, number]
+        );
         
         // Draw route line
         routeLineRef.current = L.polyline(coordinates, {
@@ -142,54 +196,16 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
           weight: 4,
           opacity: 0.7,
           lineJoin: 'round'
-        }).addTo(map);
+        }).addTo(mapRef.current);
         
         // Fit map to show both markers and route
-        const bounds = L.latLngBounds([
-          [origin.lat, origin.lng],
-          [destination.lat, destination.lng]
-        ]);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        const bounds = L.latLngBounds(coordinates);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       }
     } catch (error) {
       console.error('Error drawing route:', error);
     }
   };
-
-  // Add/update current location marker
-  useEffect(() => {
-    if (mapRef.current && currentLocation) {
-      // Remove old current location marker if exists
-      if (currentLocationMarkerRef.current) {
-        currentLocationMarkerRef.current.remove();
-      }
-      
-      // Add marker for current location with custom icon
-      currentLocationMarkerRef.current = L.marker(
-        [currentLocation.lat, currentLocation.lng],
-        { icon: CurrentLocationIcon }
-      ).addTo(mapRef.current);
-
-      // Center map on current location only if no destination is set
-      if (!markerPosition) {
-        mapRef.current.setView([currentLocation.lat, currentLocation.lng], 15);
-      }
-    }
-  }, [currentLocation, markerPosition]);
-
-  // Re-add destination marker and route if position is set (for example after parent re-render)
-  useEffect(() => {
-    if (mapRef.current && markerPosition) {
-      if (!destinationMarkerRef.current) {
-        destinationMarkerRef.current = L.marker([markerPosition.lat, markerPosition.lng]).addTo(mapRef.current);
-      }
-      
-      // Redraw route if we have current location
-      if (currentLocation) {
-        drawRoute(mapRef.current, currentLocation, markerPosition);
-      }
-    }
-  }, [markerPosition, currentLocation]);
 
   return (
     <div className="w-full">
@@ -200,7 +216,7 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
       <p className="text-sm text-muted-foreground mt-2">
         {currentLocation ? (
           <>
-            <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+            <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2 align-middle"></span>
             Your location is shown in blue. Click anywhere to set your destination and see the walking route.
           </>
         ) : (
