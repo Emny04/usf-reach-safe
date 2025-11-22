@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, MapPin, Clock, User, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { MapContainer, TileLayer, Marker } from 'react-leaflet';
-import { LatLngExpression } from 'leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 interface JourneyData {
@@ -42,7 +41,10 @@ export default function TrackJourney() {
   const { id } = useParams<{ id: string }>();
   const [journey, setJourney] = useState<JourneyData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mapCenter, setMapCenter] = useState<LatLngExpression>([28.0587, -82.4139]); // USF Tampa
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 28.0587, lng: -82.4139 });
+  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
     fetchJourney();
@@ -69,6 +71,40 @@ export default function TrackJourney() {
     };
   }, [id]);
 
+  // Initialize and update map
+  useEffect(() => {
+    if (!mapContainerRef.current || !journey) return;
+
+    // Initialize map if not already created
+    if (!mapRef.current) {
+      mapRef.current = L.map(mapContainerRef.current).setView([mapCenter.lat, mapCenter.lng], 15);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(mapRef.current);
+    }
+
+    // Update map center and marker
+    if (mapRef.current) {
+      mapRef.current.setView([mapCenter.lat, mapCenter.lng], 15);
+      
+      // Remove old marker
+      if (markerRef.current) {
+        markerRef.current.remove();
+      }
+      
+      // Add new marker
+      markerRef.current = L.marker([mapCenter.lat, mapCenter.lng]).addTo(mapRef.current);
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [mapCenter, journey]);
+
   const fetchJourney = async () => {
     try {
       const { data, error } = await supabase
@@ -88,7 +124,7 @@ export default function TrackJourney() {
       
       // Use current location if available, otherwise geocode destination
       if (data?.current_latitude && data?.current_longitude) {
-        setMapCenter([data.current_latitude, data.current_longitude]);
+        setMapCenter({ lat: data.current_latitude, lng: data.current_longitude });
       } else if (data?.dest_address) {
         // Geocode destination using Nominatim
         try {
@@ -97,7 +133,7 @@ export default function TrackJourney() {
           );
           const geoData = await response.json();
           if (geoData[0]) {
-            setMapCenter([parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)]);
+            setMapCenter({ lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) });
           }
         } catch (error) {
           console.error('Geocoding error:', error);
@@ -232,20 +268,10 @@ export default function TrackJourney() {
             )}
           </CardHeader>
           <CardContent className="p-0">
-            <div style={{ height: '300px', width: '100%', borderRadius: '0.5rem' }}>
-              <MapContainer
-                center={mapCenter}
-                zoom={15}
-                scrollWheelZoom={false}
-                style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                <Marker position={mapCenter} />
-              </MapContainer>
-            </div>
+            <div 
+              ref={mapContainerRef}
+              style={{ height: '300px', width: '100%', borderRadius: '0.5rem' }}
+            />
           </CardContent>
         </Card>
 
