@@ -44,6 +44,7 @@ export default function StartJourney() {
   const [destMapAddress, setDestMapAddress] = useState('');
   const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [calculatedDuration, setCalculatedDuration] = useState<number | null>(null);
+  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [calculatingETA, setCalculatingETA] = useState(false);
 
   useEffect(() => {
@@ -118,12 +119,18 @@ export default function StartJourney() {
       const result = await calculateTravelTime(origin, destination);
       if (result) {
         setCalculatedDuration(result.duration);
+        setCalculatedDistance(result.distance);
+        const distanceInMiles = (result.distance * 0.000621371).toFixed(2);
+        toast.success(`Route calculated: ${result.duration} min walk • ${distanceInMiles} mi`);
       } else {
         setCalculatedDuration(20); // Default fallback
+        setCalculatedDistance(null);
         toast.info('Could not calculate exact time, using estimate');
       }
     } catch (error) {
+      console.error('ETA calculation error:', error);
       setCalculatedDuration(20); // Default fallback
+      setCalculatedDistance(null);
       toast.info('Could not calculate exact time, using estimate');
     } finally {
       setCalculatingETA(false);
@@ -447,6 +454,11 @@ export default function StartJourney() {
                 <div className="p-4 bg-primary/10 rounded-lg">
                   <p className="text-sm text-muted-foreground">Estimated walking time</p>
                   <p className="text-2xl font-bold">{calculatedDuration} minutes</p>
+                  {calculatedDistance && (
+                    <p className="text-sm text-muted-foreground">
+                      Distance: {(calculatedDistance * 0.000621371).toFixed(2)} miles
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground mt-1">
                     ETA: {addMinutes(new Date(), calculatedDuration).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
