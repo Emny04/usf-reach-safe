@@ -150,6 +150,50 @@ export type Database = {
           },
         ]
       }
+      journey_steps: {
+        Row: {
+          created_at: string | null
+          distance: number
+          duration: number
+          id: string
+          instruction: string
+          journey_id: string
+          maneuver_modifier: string | null
+          maneuver_type: string | null
+          step_number: number
+        }
+        Insert: {
+          created_at?: string | null
+          distance: number
+          duration: number
+          id?: string
+          instruction: string
+          journey_id: string
+          maneuver_modifier?: string | null
+          maneuver_type?: string | null
+          step_number: number
+        }
+        Update: {
+          created_at?: string | null
+          distance?: number
+          duration?: number
+          id?: string
+          instruction?: string
+          journey_id?: string
+          maneuver_modifier?: string | null
+          maneuver_type?: string | null
+          step_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_steps_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journeys: {
         Row: {
           created_at: string | null
