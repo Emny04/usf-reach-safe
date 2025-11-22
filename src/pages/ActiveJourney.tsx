@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +11,8 @@ import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy,
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import RouteSteps from '@/components/RouteSteps';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface Journey {
   id: string;
@@ -52,6 +54,14 @@ export default function ActiveJourney() {
   const [loading, setLoading] = useState(true);
   const [showCheckInDialog, setShowCheckInDialog] = useState(false);
   const [checkInTimer, setCheckInTimer] = useState<NodeJS.Timeout | null>(null);
+  const [locationHistory, setLocationHistory] = useState<Array<{ latitude: number; longitude: number; timestamp: string }>>([]);
+  
+  // Map refs
+  const mapRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const currentMarkerRef = useRef<any>(null);
+  const destinationMarkerRef = useRef<any>(null);
+  const pathRef = useRef<any>(null);
   
   // Live location tracking
   const { location, error: locationError } = useLocationTracking(id, journey?.status === 'active');
@@ -62,6 +72,32 @@ export default function ActiveJourney() {
       return;
     }
     fetchJourneyData();
+
+    // Subscribe to location history updates for breadcrumb trail
+    const locationsChannel = supabase
+      .channel(`journey-locations-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'journey_locations',
+          filter: `journey_id=eq.${id}`,
+        },
+        (payload) => {
+          const newLocation = payload.new as any;
+          setLocationHistory((prev) => [...prev, {
+            latitude: newLocation.latitude,
+            longitude: newLocation.longitude,
+            timestamp: newLocation.timestamp,
+          }]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(locationsChannel);
+    };
   }, [user, id, navigate]);
 
   useEffect(() => {
@@ -78,6 +114,129 @@ export default function ActiveJourney() {
       };
     }
   }, [journey]);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainerRef.current || !journey) return;
+
+    // Initialize map if not already created
+    if (!mapRef.current) {
+      const defaultCenter: [number, number] = [28.0587, -82.4139]; // USF Tampa
+      mapRef.current = L.map(mapContainerRef.current).setView(defaultCenter, 15);
+      
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(mapRef.current);
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [journey]);
+
+  // Update map with markers and path
+  useEffect(() => {
+    if (!mapRef.current || !journey) return;
+
+    // Add destination marker
+    if (!destinationMarkerRef.current) {
+      // Geocode destination to get coordinates
+      const geocodeDestination = async () => {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(journey.dest_name)}&limit=1`
+          );
+          const data = await response.json();
+          if (data[0]) {
+            const destCoords: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+            
+            const destIcon = L.divIcon({
+              className: 'custom-marker',
+              html: `<div style="
+                background-color: #ef4444;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                border: 3px solid white;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              "></div>`,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            });
+
+            destinationMarkerRef.current = L.marker(destCoords, { icon: destIcon }).addTo(mapRef.current);
+            destinationMarkerRef.current.bindPopup(`<b>Destination:</b><br>${journey.dest_name}`);
+            
+            // Center map on destination initially
+            if (!location) {
+              mapRef.current.setView(destCoords, 15);
+            }
+          }
+        } catch (error) {
+          console.error('Error geocoding destination:', error);
+        }
+      };
+
+      geocodeDestination();
+    }
+
+    // Update current location marker
+    if (location) {
+      const currentCoords: [number, number] = [location.latitude, location.longitude];
+      
+      if (currentMarkerRef.current) {
+        currentMarkerRef.current.setLatLng(currentCoords);
+      } else {
+        const currentIcon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="
+            background-color: #22c55e;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          "></div>
+          <style>
+            @keyframes pulse {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.5; }
+            }
+          </style>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
+
+        currentMarkerRef.current = L.marker(currentCoords, { icon: currentIcon }).addTo(mapRef.current);
+        currentMarkerRef.current.bindPopup('<b>Your Current Location</b>');
+      }
+
+      // Center map on current location
+      mapRef.current.setView(currentCoords, 16);
+    }
+
+    // Draw breadcrumb trail
+    if (locationHistory.length > 1) {
+      // Remove old path
+      if (pathRef.current) {
+        pathRef.current.remove();
+      }
+
+      // Create path from location history
+      const pathCoordinates: [number, number][] = locationHistory.map(loc => [loc.latitude, loc.longitude]);
+      
+      pathRef.current = L.polyline(pathCoordinates, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.7,
+        smoothFactor: 1,
+      }).addTo(mapRef.current);
+    }
+  }, [location, journey, locationHistory]);
 
   const fetchJourneyData = async () => {
     try {
@@ -124,6 +283,17 @@ export default function ActiveJourney() {
 
       if (stepsData) {
         setRouteSteps(stepsData);
+      }
+
+      // Fetch location history for breadcrumb trail
+      const { data: locationsData } = await supabase
+        .from('journey_locations')
+        .select('latitude, longitude, timestamp')
+        .eq('journey_id', id)
+        .order('timestamp', { ascending: true });
+
+      if (locationsData) {
+        setLocationHistory(locationsData);
       }
     } catch (error) {
       console.error('Error fetching journey data:', error);
@@ -319,6 +489,27 @@ export default function ActiveJourney() {
                 Acquiring location...
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Live Map */}
+      {journey && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Journey Map
+            </CardTitle>
+            <CardDescription>
+              {location ? 'Live location and destination' : 'Destination location'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div 
+              ref={mapContainerRef}
+              style={{ height: '300px', width: '100%', borderRadius: '0.5rem' }}
+            />
           </CardContent>
         </Card>
       )}
