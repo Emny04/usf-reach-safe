@@ -37,20 +37,28 @@ interface JourneyData {
   }>;
 }
 
+interface LocationPoint {
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+}
+
 export default function TrackJourney() {
   const { id } = useParams<{ id: string }>();
   const [journey, setJourney] = useState<JourneyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 28.0587, lng: -82.4139 });
+  const [locationHistory, setLocationHistory] = useState<LocationPoint[]>([]);
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const pathRef = useRef<L.Polyline | null>(null);
 
   useEffect(() => {
     fetchJourney();
     
     // Subscribe to journey updates for real-time location tracking
-    const channel = supabase
+    const journeyChannel = supabase
       .channel(`public-journey-${id}`)
       .on(
         'postgres_changes',
@@ -75,8 +83,31 @@ export default function TrackJourney() {
       )
       .subscribe();
 
+    // Subscribe to location history updates for breadcrumb trail
+    const locationsChannel = supabase
+      .channel(`journey-locations-${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'journey_locations',
+          filter: `journey_id=eq.${id}`,
+        },
+        (payload) => {
+          const newLocation = payload.new as any;
+          setLocationHistory((prev) => [...prev, {
+            latitude: newLocation.latitude,
+            longitude: newLocation.longitude,
+            timestamp: newLocation.timestamp,
+          }]);
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(journeyChannel);
+      supabase.removeChannel(locationsChannel);
     };
   }, [id]);
 
@@ -136,7 +167,30 @@ export default function TrackJourney() {
     });
     
     markerRef.current = L.marker([mapCenter.lat, mapCenter.lng], { icon }).addTo(mapRef.current);
-  }, [mapCenter, journey?.current_latitude, journey?.current_longitude]);
+
+    // Draw breadcrumb trail
+    if (locationHistory.length > 1) {
+      // Remove old path
+      if (pathRef.current) {
+        pathRef.current.remove();
+      }
+
+      // Create path from location history
+      const pathCoordinates: [number, number][] = locationHistory.map(loc => [loc.latitude, loc.longitude]);
+      
+      pathRef.current = L.polyline(pathCoordinates, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.7,
+        smoothFactor: 1,
+      }).addTo(mapRef.current);
+
+      // Fit map to show entire path
+      if (pathCoordinates.length > 0) {
+        mapRef.current.fitBounds(pathRef.current.getBounds(), { padding: [50, 50] });
+      }
+    }
+  }, [mapCenter, journey?.current_latitude, journey?.current_longitude, locationHistory]);
 
   const fetchJourney = async () => {
     try {
@@ -167,6 +221,17 @@ export default function TrackJourney() {
       if (!data) throw new Error('Journey not found');
       
       setJourney(data as any);
+
+      // Fetch location history for breadcrumb trail
+      const { data: locationsData } = await supabase
+        .from('journey_locations')
+        .select('latitude, longitude, timestamp')
+        .eq('journey_id', id)
+        .order('timestamp', { ascending: true });
+
+      if (locationsData) {
+        setLocationHistory(locationsData);
+      }
       
       // Use current location if available, otherwise geocode destination
       if (data?.current_latitude && data?.current_longitude) {

@@ -34,8 +34,9 @@ export const useLocationTracking = (journeyId: string | undefined, isActive: boo
           setLocation(newLocation);
           setError(null);
 
-          // Update location in database
+          // Update location in database and save to history
           try {
+            // Update current location
             await supabase
               .from('journeys')
               .update({
@@ -44,6 +45,16 @@ export const useLocationTracking = (journeyId: string | undefined, isActive: boo
                 location_updated_at: new Date().toISOString(),
               })
               .eq('id', journeyId);
+
+            // Save location to history for breadcrumb trail
+            await supabase
+              .from('journey_locations')
+              .insert({
+                journey_id: journeyId,
+                latitude: newLocation.latitude,
+                longitude: newLocation.longitude,
+                accuracy: position.coords.accuracy,
+              });
           } catch (err) {
             console.error('Failed to update location:', err);
           }

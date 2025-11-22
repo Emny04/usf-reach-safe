@@ -115,6 +115,41 @@ export type Database = {
           },
         ]
       }
+      journey_locations: {
+        Row: {
+          accuracy: number | null
+          id: string
+          journey_id: string
+          latitude: number
+          longitude: number
+          timestamp: string | null
+        }
+        Insert: {
+          accuracy?: number | null
+          id?: string
+          journey_id: string
+          latitude: number
+          longitude: number
+          timestamp?: string | null
+        }
+        Update: {
+          accuracy?: number | null
+          id?: string
+          journey_id?: string
+          latitude?: number
+          longitude?: number
+          timestamp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_locations_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "journeys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journeys: {
         Row: {
           created_at: string | null
