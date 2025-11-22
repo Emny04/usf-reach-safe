@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import 'leaflet-routing-machine';
+import { toast } from 'sonner';
 
 interface JourneyPathProps {
   map: L.Map;
@@ -10,11 +10,11 @@ interface JourneyPathProps {
 
 /**
  * JourneyPath - Displays the route from current location to destination
- * Uses Leaflet Routing Machine with OSRM for realistic walking routes
+ * Uses Mapbox Directions API with walking mode for accurate campus routes
  * Updates automatically as the user moves
  */
 export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
-  const routingControlRef = useRef<L.Routing.Control | null>(null);
+  const routePolylineRef = useRef<L.Polyline | null>(null);
   const destinationMarkerRef = useRef<L.Marker | null>(null);
 
   // Destination marker icon (red pin)
@@ -29,50 +29,126 @@ export const JourneyPath = ({ map, start, destination }: JourneyPathProps) => {
     iconAnchor: [15, 48],
   });
 
+  /**
+   * Fetch walking route from Mapbox Directions API
+   * Returns array of [lat, lng] coordinates or null on error
+   */
+  const fetchWalkingRoute = async (
+    start: { lat: number; lng: number },
+    dest: { lat: number; lng: number }
+  ): Promise<[number, number][] | null> => {
+    try {
+      const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+      
+      if (!mapboxToken) {
+        console.error('Mapbox token not configured');
+        return null;
+      }
+
+      // Mapbox uses [lng, lat] order
+      const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${start.lng},${start.lat};${dest.lng},${dest.lat}?geometries=geojson&overview=full&access_token=${mapboxToken}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error('Mapbox API error:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (!data.routes || data.routes.length === 0) {
+        console.error('No routes found');
+        return null;
+      }
+
+      // Extract coordinates and convert from [lng, lat] to [lat, lng]
+      const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
+        (c: number[]) => [c[1], c[0]] as [number, number]
+      );
+
+      return coords;
+    } catch (error) {
+      console.error('Error fetching walking route:', error);
+      return null;
+    }
+  };
+
+  /**
+   * Draw a fallback straight line if Mapbox routing fails
+   */
+  const drawFallbackRoute = (
+    start: { lat: number; lng: number },
+    dest: { lat: number; lng: number }
+  ): L.Polyline => {
+    return L.polyline(
+      [[start.lat, start.lng], [dest.lat, dest.lng]],
+      { color: '#10b981', weight: 5, opacity: 0.7 }
+    );
+  };
+
   useEffect(() => {
     if (!map) return;
 
-    // Remove old routing control and marker
-    if (routingControlRef.current) {
-      map.removeControl(routingControlRef.current);
-      routingControlRef.current = null;
+    let mounted = true;
+
+    // Clean up old route and marker
+    if (routePolylineRef.current) {
+      map.removeLayer(routePolylineRef.current);
+      routePolylineRef.current = null;
     }
     if (destinationMarkerRef.current) {
       destinationMarkerRef.current.remove();
       destinationMarkerRef.current = null;
     }
 
-    // Create routing control with OSRM foot profile for walking paths
-    routingControlRef.current = L.Routing.control({
-      waypoints: [
-        L.latLng(start.lat, start.lng),
-        L.latLng(destination.lat, destination.lng)
-      ],
-      router: L.Routing.osrmv1({
-        serviceUrl: 'https://router.project-osrm.org/route/v1/foot' // Explicit foot profile in URL
-      }),
-      lineOptions: {
-        styles: [{ color: '#10b981', weight: 5, opacity: 0.7 }],
-        extendToWaypoints: false,
-        missingRouteTolerance: 0
-      },
-      addWaypoints: false,
-      show: false, // Hide the instruction panel
-      fitSelectedRoutes: true,
-      routeWhileDragging: false
-    }).addTo(map);
+    // Fetch and draw the walking route
+    const drawRoute = async () => {
+      const routeCoords = await fetchWalkingRoute(start, destination);
 
-    // Add destination marker
-    destinationMarkerRef.current = L.marker(
-      [destination.lat, destination.lng],
-      { icon: destinationIcon }
-    ).addTo(map);
+      if (!mounted) return;
 
-    // Cleanup
+      if (routeCoords && routeCoords.length > 0) {
+        // Draw Mapbox walking route
+        routePolylineRef.current = L.polyline(routeCoords, {
+          color: '#00a86b',
+          weight: 5,
+          opacity: 0.8
+        }).addTo(map);
+
+        // Fit map bounds to route with padding
+        map.fitBounds(routePolylineRef.current.getBounds(), { 
+          padding: [50, 50],
+          maxZoom: 17
+        });
+      } else {
+        // Fallback: draw straight line if Mapbox fails
+        console.warn('Using fallback straight-line route');
+        routePolylineRef.current = drawFallbackRoute(start, destination).addTo(map);
+        
+        map.fitBounds(routePolylineRef.current.getBounds(), { 
+          padding: [50, 50],
+          maxZoom: 17
+        });
+
+        toast.error('No walking path found, showing direct route');
+      }
+
+      // Add destination marker
+      destinationMarkerRef.current = L.marker(
+        [destination.lat, destination.lng],
+        { icon: destinationIcon }
+      ).addTo(map);
+    };
+
+    drawRoute();
+
+    // Cleanup on unmount or dependencies change
     return () => {
-      if (routingControlRef.current) {
-        map.removeControl(routingControlRef.current);
-        routingControlRef.current = null;
+      mounted = false;
+      if (routePolylineRef.current) {
+        map.removeLayer(routePolylineRef.current);
+        routePolylineRef.current = null;
       }
       if (destinationMarkerRef.current) {
         destinationMarkerRef.current.remove();
