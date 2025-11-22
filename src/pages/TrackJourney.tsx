@@ -1,12 +1,14 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Shield, MapPin, Clock, User, Phone } from 'lucide-react';
+import { Shield, MapPin, Clock, User, Phone, TrendingUp, Route } from 'lucide-react';
 import { toast } from 'sonner';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { calculateTotalDistance, formatDistance, formatSpeed } from '@/utils/calculateDistance';
+import { formatDistanceToNow } from 'date-fns';
 
 interface JourneyData {
   id: string;
@@ -300,6 +302,25 @@ export default function TrackJourney() {
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )[0];
 
+  // Calculate journey statistics
+  const journeyStats = useMemo(() => {
+    if (locationHistory.length < 2) {
+      return { distance: 0, avgSpeed: 0, duration: 0 };
+    }
+
+    const distance = calculateTotalDistance(locationHistory);
+    const startTime = new Date(locationHistory[0].timestamp).getTime();
+    const endTime = new Date(locationHistory[locationHistory.length - 1].timestamp).getTime();
+    const durationSeconds = (endTime - startTime) / 1000;
+    const avgSpeed = durationSeconds > 0 ? distance / durationSeconds : 0;
+
+    return {
+      distance,
+      avgSpeed,
+      duration: durationSeconds,
+    };
+  }, [locationHistory]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 py-8 px-4">
       <div className="container mx-auto max-w-4xl space-y-4">
@@ -364,6 +385,46 @@ export default function TrackJourney() {
             )}
           </CardContent>
         </Card>
+
+        {/* Journey Statistics */}
+        {locationHistory.length >= 2 && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Journey Statistics
+              </CardTitle>
+              <CardDescription>Real-time tracking data</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Route className="h-4 w-4" />
+                    <span className="text-sm">Distance Traveled</span>
+                  </div>
+                  <p className="text-2xl font-bold">{formatDistance(journeyStats.distance)}</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <TrendingUp className="h-4 w-4" />
+                    <span className="text-sm">Average Speed</span>
+                  </div>
+                  <p className="text-2xl font-bold">{formatSpeed(journeyStats.avgSpeed)}</p>
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span className="text-sm">Journey Duration</span>
+                  </div>
+                  <p className="text-lg font-semibold">
+                    {formatDistanceToNow(new Date(journey.start_time), { addSuffix: false })}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Map with Live Location */}
         <Card>
