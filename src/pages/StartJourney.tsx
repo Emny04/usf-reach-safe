@@ -93,7 +93,7 @@ export default function StartJourney() {
     setSelectedContacts(newSet);
   };
 
-  const calculateETA = async (origin: string, destination: string) => {
+  const calculateETA = async (origin: string | { lat: number; lng: number }, destination: string | { lat: number; lng: number }) => {
     if (!origin || !destination) return;
     
     setCalculatingETA(true);
@@ -115,12 +115,54 @@ export default function StartJourney() {
 
   // Auto-calculate ETA when both start and destination are set
   useEffect(() => {
-    let origin = '';
-    let destination = '';
+    let origin: string | { lat: number; lng: number } | null = null;
+    let destination: string | { lat: number; lng: number } | null = null;
 
-    // Get origin
+    // Get origin - use geolocation for current location
     if (startType === 'current') {
-      origin = 'Current Location';
+      // Get user's current location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            origin = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            
+            // Get destination
+            if (destType === 'place' && destPlaceId) {
+              const place = safePlaces.find(p => p.id === destPlaceId);
+              destination = place?.address || '';
+            } else if (destType === 'custom' && destCustom) {
+              destination = destCustom;
+            } else if (destType === 'map' && destMapAddress) {
+              destination = destMapAddress;
+            }
+            
+            if (destination) {
+              calculateETA(origin!, destination);
+            }
+          },
+          () => {
+            // Fallback to default location if geolocation fails
+            origin = { lat: 28.0587, lng: -82.4139 }; // USF Tampa
+            
+            // Get destination
+            if (destType === 'place' && destPlaceId) {
+              const place = safePlaces.find(p => p.id === destPlaceId);
+              destination = place?.address || '';
+            } else if (destType === 'custom' && destCustom) {
+              destination = destCustom;
+            } else if (destType === 'map' && destMapAddress) {
+              destination = destMapAddress;
+            }
+            
+            if (destination) {
+              calculateETA(origin, destination);
+            }
+          }
+        );
+      }
     } else if (startType === 'place' && startPlaceId) {
       const place = safePlaces.find(p => p.id === startPlaceId);
       origin = place?.address || '';
@@ -128,18 +170,20 @@ export default function StartJourney() {
       origin = startCustom;
     }
 
-    // Get destination
-    if (destType === 'place' && destPlaceId) {
-      const place = safePlaces.find(p => p.id === destPlaceId);
-      destination = place?.address || '';
-    } else if (destType === 'custom' && destCustom) {
-      destination = destCustom;
-    } else if (destType === 'map' && destMapAddress) {
-      destination = destMapAddress;
-    }
+    // Get destination (only when not using current location as start)
+    if (startType !== 'current') {
+      if (destType === 'place' && destPlaceId) {
+        const place = safePlaces.find(p => p.id === destPlaceId);
+        destination = place?.address || '';
+      } else if (destType === 'custom' && destCustom) {
+        destination = destCustom;
+      } else if (destType === 'map' && destMapAddress) {
+        destination = destMapAddress;
+      }
 
-    if (origin && destination) {
-      calculateETA(origin, destination);
+      if (origin && destination) {
+        calculateETA(origin, destination);
+      }
     }
   }, [startType, startPlaceId, startCustom, destType, destPlaceId, destCustom, destMapAddress, safePlaces]);
 
