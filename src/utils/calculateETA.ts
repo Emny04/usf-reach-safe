@@ -29,17 +29,26 @@ export const calculateTravelTime = async (
       destCoords = destination;
     }
 
-    // Use OSRM for routing (walking mode)
+    // Use OSRM for pedestrian routing (foot mode)
     const response = await fetch(
-      `https://router.project-osrm.org/route/v1/foot/${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}?overview=false`
+      `https://router.project-osrm.org/route/v1/foot/${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}?overview=false&steps=true`
     );
     
     const data = await response.json();
     
     if (data.routes && data.routes[0]) {
+      const route = data.routes[0];
+      const distanceInMeters = route.distance;
+      
+      // Calculate duration based on 3 mph walking speed
+      // 3 mph = 4.828032 km/h = 1.34112 m/s
+      const walkingSpeedMps = 1.34112; // meters per second
+      const durationInSeconds = distanceInMeters / walkingSpeedMps;
+      const durationInMinutes = Math.ceil(durationInSeconds / 60);
+      
       return {
-        duration: Math.ceil(data.routes[0].duration / 60), // Convert seconds to minutes
-        distance: data.routes[0].distance, // meters
+        duration: durationInMinutes,
+        distance: distanceInMeters,
       };
     }
     
