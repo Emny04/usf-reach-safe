@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, MapPin, Clock, User, Phone } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,6 +18,9 @@ interface JourneyData {
   eta_time: string | null;
   end_time: string | null;
   status: string;
+  current_latitude: number | null;
+  current_longitude: number | null;
+  location_updated_at: string | null;
   profiles: {
     name: string;
     phone: string | null;
@@ -83,8 +86,13 @@ export default function TrackJourney() {
       
       setJourney(data as any);
       
-      // Geocode destination for map
-      if (isLoaded && data?.dest_address) {
+      // Use current location if available, otherwise geocode destination
+      if (data?.current_latitude && data?.current_longitude) {
+        setMapCenter({ 
+          lat: data.current_latitude, 
+          lng: data.current_longitude 
+        });
+      } else if (isLoaded && data?.dest_address) {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: data.dest_address }, (results, status) => {
           if (status === 'OK' && results?.[0]) {
@@ -208,9 +216,20 @@ export default function TrackJourney() {
           </CardContent>
         </Card>
 
-        {/* Map */}
+        {/* Map with Live Location */}
         {isLoaded && (
           <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                {journey.current_latitude ? 'Current Location' : 'Destination'}
+              </CardTitle>
+              {journey.location_updated_at && (
+                <CardDescription>
+                  Updated {new Date(journey.location_updated_at).toLocaleString()}
+                </CardDescription>
+              )}
+            </CardHeader>
             <CardContent className="p-0">
               <GoogleMap
                 mapContainerStyle={{ width: '100%', height: '300px', borderRadius: '0.5rem' }}
@@ -221,7 +240,17 @@ export default function TrackJourney() {
                   zoomControl: true,
                 }}
               >
-                <Marker position={mapCenter} />
+                <Marker 
+                  position={mapCenter}
+                  icon={journey.current_latitude ? {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: '#00b894',
+                    fillOpacity: 1,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 2,
+                  } : undefined}
+                />
               </GoogleMap>
             </CardContent>
           </Card>

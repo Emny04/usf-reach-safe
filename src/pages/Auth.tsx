@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,15 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { signUp, signIn, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Get tab from URL params
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'signup') {
+      setIsSignUp(true);
+    }
+  }, []);
 
   // Redirect if already logged in
   if (user) {

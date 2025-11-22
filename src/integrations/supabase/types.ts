@@ -118,11 +118,14 @@ export type Database = {
       journeys: {
         Row: {
           created_at: string | null
+          current_latitude: number | null
+          current_longitude: number | null
           dest_address: string
           dest_name: string
           end_time: string | null
           eta_time: string | null
           id: string
+          location_updated_at: string | null
           start_address: string
           start_name: string
           start_time: string | null
@@ -131,11 +134,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          current_latitude?: number | null
+          current_longitude?: number | null
           dest_address: string
           dest_name: string
           end_time?: string | null
           eta_time?: string | null
           id?: string
+          location_updated_at?: string | null
           start_address: string
           start_name: string
           start_time?: string | null
@@ -144,11 +150,14 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          current_latitude?: number | null
+          current_longitude?: number | null
           dest_address?: string
           dest_name?: string
           end_time?: string | null
           eta_time?: string | null
           id?: string
+          location_updated_at?: string | null
           start_address?: string
           start_name?: string
           start_time?: string | null
