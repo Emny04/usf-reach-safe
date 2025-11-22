@@ -107,18 +107,31 @@ export default function TrackJourney() {
 
   const fetchJourney = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: journeyData, error: journeyError } = await supabase
         .from('journeys')
         .select(`
           *,
-          profiles!inner(name, phone),
           journey_contacts(contacts(name, phone)),
           journey_checkins(timestamp, response)
         `)
         .eq('id', id)
         .single();
 
-      if (error) throw error;
+      if (journeyError) throw journeyError;
+
+      // Fetch profile separately
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name, phone')
+        .eq('id', journeyData.user_id)
+        .single();
+
+      const data = {
+        ...journeyData,
+        profiles: profileData || { name: 'Unknown User', phone: null }
+      };
+
+      if (!data) throw new Error('Journey not found');
       
       setJourney(data as any);
       
