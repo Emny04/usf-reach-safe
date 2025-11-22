@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { MapPicker } from '@/components/MapPicker';
-import { MapPin, Navigation, Clock } from 'lucide-react';
+import { calculateTravelTime } from '@/utils/calculateETA';
+import { MapPin, Navigation, Clock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { addMinutes } from 'date-fns';
 
@@ -41,7 +41,8 @@ export default function StartJourney() {
   const [destPlaceId, setDestPlaceId] = useState('');
   const [destCustom, setDestCustom] = useState('');
   const [destMapAddress, setDestMapAddress] = useState('');
-  const [duration, setDuration] = useState('20');
+  const [calculatedDuration, setCalculatedDuration] = useState<number | null>(null);
+  const [calculatingETA, setCalculatingETA] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -91,6 +92,56 @@ export default function StartJourney() {
     }
     setSelectedContacts(newSet);
   };
+
+  const calculateETA = async (origin: string, destination: string) => {
+    if (!origin || !destination) return;
+    
+    setCalculatingETA(true);
+    try {
+      const result = await calculateTravelTime(origin, destination);
+      if (result) {
+        setCalculatedDuration(result.duration);
+      } else {
+        setCalculatedDuration(20); // Default fallback
+        toast.info('Could not calculate exact time, using estimate');
+      }
+    } catch (error) {
+      setCalculatedDuration(20); // Default fallback
+      toast.info('Could not calculate exact time, using estimate');
+    } finally {
+      setCalculatingETA(false);
+    }
+  };
+
+  // Auto-calculate ETA when both start and destination are set
+  useEffect(() => {
+    let origin = '';
+    let destination = '';
+
+    // Get origin
+    if (startType === 'current') {
+      origin = 'Current Location';
+    } else if (startType === 'place' && startPlaceId) {
+      const place = safePlaces.find(p => p.id === startPlaceId);
+      origin = place?.address || '';
+    } else if (startType === 'custom' && startCustom) {
+      origin = startCustom;
+    }
+
+    // Get destination
+    if (destType === 'place' && destPlaceId) {
+      const place = safePlaces.find(p => p.id === destPlaceId);
+      destination = place?.address || '';
+    } else if (destType === 'custom' && destCustom) {
+      destination = destCustom;
+    } else if (destType === 'map' && destMapAddress) {
+      destination = destMapAddress;
+    }
+
+    if (origin && destination) {
+      calculateETA(origin, destination);
+    }
+  }, [startType, startPlaceId, startCustom, destType, destPlaceId, destCustom, destMapAddress, safePlaces]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +196,8 @@ export default function StartJourney() {
 
     try {
       const now = new Date();
-      const eta = addMinutes(now, parseInt(duration));
+      const duration = calculatedDuration || 20; // Use calculated or fallback
+      const eta = addMinutes(now, duration);
 
       // Create journey
       const { data: journeyData, error: journeyError } = await supabase
@@ -336,22 +388,30 @@ export default function StartJourney() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Estimated Time
+              Estimated Arrival Time
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration (minutes)</Label>
-              <Input
-                id="duration"
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                min="5"
-                max="180"
-                required
-              />
-            </div>
+            {calculatingETA ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Calculating travel time...</span>
+              </div>
+            ) : calculatedDuration ? (
+              <div className="space-y-2">
+                <div className="p-4 bg-primary/10 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Estimated walking time</p>
+                  <p className="text-2xl font-bold">{calculatedDuration} minutes</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    ETA: {addMinutes(new Date(), calculatedDuration).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Set your destination to calculate travel time
+              </p>
+            )}
           </CardContent>
         </Card>
 
