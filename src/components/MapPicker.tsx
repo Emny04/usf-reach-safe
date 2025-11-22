@@ -47,6 +47,18 @@ function LocationMarker({ onLocationSelect }: { onLocationSelect: (address: stri
   return position === null ? null : <Marker position={position} />;
 }
 
+const MapContent = ({ onLocationSelect }: { onLocationSelect: (address: string, lat: number, lng: number) => void }) => {
+  return (
+    <>
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
+      <LocationMarker onLocationSelect={onLocationSelect} />
+    </>
+  );
+};
+
 export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) => {
   const center: LatLngExpression = initialCenter 
     ? [initialCenter.lat, initialCenter.lng]
@@ -61,11 +73,7 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
           scrollWheelZoom={true}
           style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
         >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-          <LocationMarker onLocationSelect={onLocationSelect} />
+          <MapContent onLocationSelect={onLocationSelect} />
         </MapContainer>
       </div>
       <p className="text-sm text-muted-foreground mt-2">
