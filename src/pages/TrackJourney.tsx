@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Shield, MapPin, Clock, User, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { GoogleMap, Marker } from '@react-google-maps/api';
-import { useGoogleMaps } from '@/components/GoogleMapsProvider';
+import { MapContainer, TileLayer, Marker } from 'react-leaflet';
+import { LatLngExpression } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface JourneyData {
   id: string;
@@ -39,10 +40,9 @@ interface JourneyData {
 
 export default function TrackJourney() {
   const { id } = useParams<{ id: string }>();
-  const { isLoaded } = useGoogleMaps();
   const [journey, setJourney] = useState<JourneyData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mapCenter, setMapCenter] = useState({ lat: 28.0587, lng: -82.4139 }); // USF Tampa
+  const [mapCenter, setMapCenter] = useState<LatLngExpression>([28.0587, -82.4139]); // USF Tampa
 
   useEffect(() => {
     fetchJourney();
@@ -88,18 +88,20 @@ export default function TrackJourney() {
       
       // Use current location if available, otherwise geocode destination
       if (data?.current_latitude && data?.current_longitude) {
-        setMapCenter({ 
-          lat: data.current_latitude, 
-          lng: data.current_longitude 
-        });
-      } else if (isLoaded && data?.dest_address) {
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ address: data.dest_address }, (results, status) => {
-          if (status === 'OK' && results?.[0]) {
-            const location = results[0].geometry.location;
-            setMapCenter({ lat: location.lat(), lng: location.lng() });
+        setMapCenter([data.current_latitude, data.current_longitude]);
+      } else if (data?.dest_address) {
+        // Geocode destination using Nominatim
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(data.dest_address)}&limit=1`
+          );
+          const geoData = await response.json();
+          if (geoData[0]) {
+            setMapCenter([parseFloat(geoData[0].lat), parseFloat(geoData[0].lon)]);
           }
-        });
+        } catch (error) {
+          console.error('Geocoding error:', error);
+        }
       }
     } catch (error: any) {
       toast.error('Failed to load journey');
@@ -217,44 +219,35 @@ export default function TrackJourney() {
         </Card>
 
         {/* Map with Live Location */}
-        {isLoaded && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                {journey.current_latitude ? 'Current Location' : 'Destination'}
-              </CardTitle>
-              {journey.location_updated_at && (
-                <CardDescription>
-                  Updated {new Date(journey.location_updated_at).toLocaleString()}
-                </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              <GoogleMap
-                mapContainerStyle={{ width: '100%', height: '300px', borderRadius: '0.5rem' }}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              {journey.current_latitude ? 'Current Location' : 'Destination'}
+            </CardTitle>
+            {journey.location_updated_at && (
+              <CardDescription>
+                Updated {new Date(journey.location_updated_at).toLocaleString()}
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent className="p-0">
+            <div style={{ height: '300px', width: '100%', borderRadius: '0.5rem' }}>
+              <MapContainer
                 center={mapCenter}
                 zoom={15}
-                options={{
-                  disableDefaultUI: true,
-                  zoomControl: true,
-                }}
+                scrollWheelZoom={false}
+                style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
               >
-                <Marker 
-                  position={mapCenter}
-                  icon={journey.current_latitude ? {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 10,
-                    fillColor: '#00b894',
-                    fillOpacity: 1,
-                    strokeColor: '#ffffff',
-                    strokeWeight: 2,
-                  } : undefined}
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 />
-              </GoogleMap>
-            </CardContent>
-          </Card>
-        )}
+                <Marker position={mapCenter} />
+              </MapContainer>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Last Check-in */}
         {lastCheckin && (

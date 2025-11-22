@@ -1,72 +1,73 @@
 import { useState, useCallback } from 'react';
-import { GoogleMap, Marker } from '@react-google-maps/api';
-import { useGoogleMaps } from '@/components/GoogleMapsProvider';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L, { LatLngExpression } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix default marker icon
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 interface MapPickerProps {
   onLocationSelect: (address: string, lat: number, lng: number) => void;
   initialCenter?: { lat: number; lng: number };
 }
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '400px',
-  borderRadius: '0.5rem',
-};
+const defaultCenter: LatLngExpression = [28.0587, -82.4139]; // USF Tampa campus
 
-const defaultCenter = {
-  lat: 28.0587, // USF Tampa campus
-  lng: -82.4139,
-};
+function LocationMarker({ onLocationSelect }: { onLocationSelect: (address: string, lat: number, lng: number) => void }) {
+  const [position, setPosition] = useState<L.LatLng | null>(null);
 
-export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) => {
-  const { isLoaded } = useGoogleMaps();
-  const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(null);
-
-  const handleMapClick = useCallback(
-    async (e: google.maps.MapMouseEvent) => {
-      if (!e.latLng) return;
-
-      const lat = e.latLng.lat();
-      const lng = e.latLng.lng();
-      setMarker({ lat, lng });
-
-      // Reverse geocode to get address
-      const geocoder = new google.maps.Geocoder();
+  useMapEvents({
+    click: async (e) => {
+      setPosition(e.latlng);
+      
+      // Reverse geocode using Nominatim
       try {
-        const result = await geocoder.geocode({ location: { lat, lng } });
-        if (result.results[0]) {
-          onLocationSelect(result.results[0].formatted_address, lat, lng);
-        }
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}`
+        );
+        const data = await response.json();
+        onLocationSelect(data.display_name || 'Unknown location', e.latlng.lat, e.latlng.lng);
       } catch (error) {
         console.error('Geocoding error:', error);
+        onLocationSelect('Unknown location', e.latlng.lat, e.latlng.lng);
       }
     },
-    [onLocationSelect]
-  );
+  });
 
-  if (!isLoaded) {
-    return (
-      <div className="w-full h-[400px] bg-muted animate-pulse rounded-lg flex items-center justify-center">
-        <p className="text-muted-foreground">Loading map...</p>
-      </div>
-    );
-  }
+  return position === null ? null : <Marker position={position} />;
+}
+
+export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) => {
+  const center: LatLngExpression = initialCenter 
+    ? [initialCenter.lat, initialCenter.lng]
+    : defaultCenter;
 
   return (
     <div className="w-full">
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        center={initialCenter || defaultCenter}
-        zoom={15}
-        onClick={handleMapClick}
-        options={{
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-        }}
-      >
-        {marker && <Marker position={marker} />}
-      </GoogleMap>
+      <div style={{ height: '400px', width: '100%', borderRadius: '0.5rem' }}>
+        <MapContainer
+          center={center}
+          zoom={15}
+          scrollWheelZoom={true}
+          style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          <LocationMarker onLocationSelect={onLocationSelect} />
+        </MapContainer>
+      </div>
       <p className="text-sm text-muted-foreground mt-2">
         Click anywhere on the map to set your destination
       </p>
