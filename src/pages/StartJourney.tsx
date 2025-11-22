@@ -23,6 +23,8 @@ interface SafePlace {
   id: string;
   name: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export default function StartJourney() {
@@ -93,7 +95,7 @@ export default function StartJourney() {
       // Fetch safe places
       const { data: placesData } = await supabase
         .from('safe_places')
-        .select('id, name, address')
+        .select('id, name, address, latitude, longitude')
         .or(`user_id.eq.${user?.id},is_usf_recommended.eq.true`);
 
       if (placesData) {
@@ -169,19 +171,12 @@ export default function StartJourney() {
       } else if (startType === 'place' && startPlaceId) {
         const place = safePlaces.find(p => p.id === startPlaceId);
         if (place) {
-          // Geocode the place address to get coordinates
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(place.address)}&limit=1`
-            );
-            const data = await response.json();
-            if (data[0]) {
-              const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-              setStartCoords(coords);
-              origin = place.address;
-            }
-          } catch (error) {
-            console.error('Geocoding error:', error);
+          // Use stored coordinates if available
+          if (place.latitude && place.longitude) {
+            const coords = { lat: place.latitude, lng: place.longitude };
+            setStartCoords(coords);
+            origin = coords;
+          } else {
             origin = place.address;
           }
         }
@@ -205,7 +200,13 @@ export default function StartJourney() {
       // Get destination - use stored coords when available
       if (destType === 'place' && destPlaceId) {
         const place = safePlaces.find(p => p.id === destPlaceId);
-        destination = place?.address || '';
+        if (place) {
+          if (place.latitude && place.longitude) {
+            destination = { lat: place.latitude, lng: place.longitude };
+          } else {
+            destination = place.address;
+          }
+        }
       } else if (destType === 'custom' && destCustom) {
         destination = destCustom;
       } else if (destType === 'map') {
