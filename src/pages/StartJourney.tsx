@@ -54,8 +54,8 @@ export default function StartJourney() {
     }
     fetchData();
     
-    // Get user's current location on mount
-    if (navigator.geolocation && startType === 'current') {
+    // Get user's current location on mount if using current location
+    if (startType === 'current' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setStartCoords({
@@ -67,6 +67,9 @@ export default function StartJourney() {
           console.error('Geolocation error:', error);
         }
       );
+    } else if (startType !== 'current') {
+      // Clear startCoords when not using current location
+      setStartCoords(null);
     }
   }, [user, navigate, startType]);
 
@@ -165,8 +168,37 @@ export default function StartJourney() {
         }
       } else if (startType === 'place' && startPlaceId) {
         const place = safePlaces.find(p => p.id === startPlaceId);
-        origin = place?.address || '';
+        if (place) {
+          // Geocode the place address to get coordinates
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(place.address)}&limit=1`
+            );
+            const data = await response.json();
+            if (data[0]) {
+              const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+              setStartCoords(coords);
+              origin = place.address;
+            }
+          } catch (error) {
+            console.error('Geocoding error:', error);
+            origin = place.address;
+          }
+        }
       } else if (startType === 'custom' && startCustom) {
+        // Geocode custom address
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(startCustom)}&limit=1`
+          );
+          const data = await response.json();
+          if (data[0]) {
+            const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            setStartCoords(coords);
+          }
+        } catch (error) {
+          console.error('Geocoding error:', error);
+        }
         origin = startCustom;
       }
 
@@ -419,6 +451,7 @@ export default function StartJourney() {
             {destType === 'map' && (
               <div className="space-y-2">
                 <MapPicker
+                  startLocation={startCoords}
                   onLocationSelect={(address, lat, lng) => {
                     setDestMapAddress(address);
                     setDestCoords({ lat, lng });
