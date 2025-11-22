@@ -89,7 +89,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-2xl">Welcome back!</CardTitle>
-              <CardDescription>Stay safe with Safe Reach</CardDescription>
+              <CardDescription>Stay safe with SafeReach</CardDescription>
             </div>
             {profile?.usf_campus_mode && (
               <Badge variant="secondary" className="gap-1">

@@ -23,7 +23,7 @@ export default function Landing() {
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary">
             <Shield className="h-10 w-10 text-primary-foreground" />
           </div>
-          <h1 className="mb-4 text-4xl font-bold md:text-6xl">Safe Reach</h1>
+          <h1 className="mb-4 text-4xl font-bold md:text-6xl">SafeReach</h1>
           <p className="mb-8 max-w-2xl text-lg text-muted-foreground md:text-xl">
             Walk safely with real-time journey tracking and emergency alerts. Let your trusted contacts know you're safe.
           </p>
@@ -138,7 +138,7 @@ export default function Landing() {
             </CardHeader>
             <CardContent>
               <p className="mb-6 text-muted-foreground">
-                Join students and community members who trust Safe Reach for their safety
+                Join students and community members who trust SafeReach for their safety
               </p>
               <Button size="lg" onClick={() => navigate('/auth?tab=signup')}>
                 Create Free Account

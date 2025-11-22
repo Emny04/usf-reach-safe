@@ -436,7 +436,7 @@ export default function ActiveJourney() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Track My Journey - Safe Reach',
+          title: 'Track My Journey - SafeReach',
           text: `I'm on my way. Track my journey here:`,
           url: trackingUrl,
         });
