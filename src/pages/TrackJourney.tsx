@@ -327,7 +327,7 @@ export default function TrackJourney() {
   // Calculate journey statistics
   const journeyStats = useMemo(() => {
     if (locationHistory.length < 2) {
-      return { distance: 0, avgSpeed: 0, duration: 0 };
+      return { distance: 0, avgSpeed: 0, duration: 0, progress: 0, totalDistance: 0 };
     }
 
     const distance = calculateTotalDistance(locationHistory);
@@ -336,12 +336,20 @@ export default function TrackJourney() {
     const durationSeconds = (endTime - startTime) / 1000;
     const avgSpeed = durationSeconds > 0 ? distance / durationSeconds : 0;
 
+    // Calculate total planned distance from route steps
+    const totalDistance = routeSteps.reduce((sum, step) => sum + step.distance, 0);
+    
+    // Calculate progress percentage
+    const progress = totalDistance > 0 ? Math.min((distance / totalDistance) * 100, 100) : 0;
+
     return {
       distance,
       avgSpeed,
       duration: durationSeconds,
+      progress,
+      totalDistance,
     };
-  }, [locationHistory]);
+  }, [locationHistory, routeSteps]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 py-8 px-4">
@@ -419,29 +427,51 @@ export default function TrackJourney() {
               <CardDescription>Real-time tracking data</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Route className="h-4 w-4" />
-                    <span className="text-sm">Distance Traveled</span>
+              <div className="space-y-4">
+                {/* Progress Bar */}
+                {journeyStats.totalDistance > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Journey Progress</span>
+                      <span className="font-bold text-primary">{Math.round(journeyStats.progress)}%</span>
+                    </div>
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-secondary">
+                      <div 
+                        className="h-full bg-primary transition-all duration-500"
+                        style={{ width: `${journeyStats.progress}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Start</span>
+                      <span>{formatDistance(journeyStats.totalDistance)} total</span>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold">{formatDistance(journeyStats.distance)}</p>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <TrendingUp className="h-4 w-4" />
-                    <span className="text-sm">Average Speed</span>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Route className="h-4 w-4" />
+                      <span className="text-sm">Distance Traveled</span>
+                    </div>
+                    <p className="text-2xl font-bold">{formatDistance(journeyStats.distance)}</p>
                   </div>
-                  <p className="text-2xl font-bold">{formatSpeed(journeyStats.avgSpeed)}</p>
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-sm">Journey Duration</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-sm">Average Speed</span>
+                    </div>
+                    <p className="text-2xl font-bold">{formatSpeed(journeyStats.avgSpeed)}</p>
                   </div>
-                  <p className="text-lg font-semibold">
-                    {formatDistanceToNow(new Date(journey.start_time), { addSuffix: false })}
-                  </p>
+                  <div className="col-span-2 space-y-1">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span className="text-sm">Journey Duration</span>
+                    </div>
+                    <p className="text-lg font-semibold">
+                      {formatDistanceToNow(new Date(journey.start_time), { addSuffix: false })}
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
