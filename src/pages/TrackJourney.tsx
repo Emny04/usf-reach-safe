@@ -224,7 +224,7 @@ export default function TrackJourney() {
         .from('profiles')
         .select('name, phone')
         .eq('id', journeyData.user_id)
-        .single();
+        .maybeSingle();
 
       const data = {
         ...journeyData,
