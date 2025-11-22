@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L, { LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
+const DefaultIcon = L.icon({
   iconUrl: icon,
   shadowUrl: iconShadow,
   iconSize: [25, 41],
@@ -47,18 +47,6 @@ function LocationMarker({ onLocationSelect }: { onLocationSelect: (address: stri
   return position === null ? null : <Marker position={position} />;
 }
 
-const MapContent = ({ onLocationSelect }: { onLocationSelect: (address: string, lat: number, lng: number) => void }) => {
-  return (
-    <>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      <LocationMarker onLocationSelect={onLocationSelect} />
-    </>
-  );
-};
-
 export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) => {
   const center: LatLngExpression = initialCenter 
     ? [initialCenter.lat, initialCenter.lng]
@@ -73,7 +61,11 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
           scrollWheelZoom={true}
           style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
         >
-          <MapContent onLocationSelect={onLocationSelect} />
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          <LocationMarker onLocationSelect={onLocationSelect} />
         </MapContainer>
       </div>
       <p className="text-sm text-muted-foreground mt-2">
