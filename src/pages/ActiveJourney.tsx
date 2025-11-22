@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy } from 'lucide-react';
+import { MapPin, Clock, Users, CheckCircle, AlertTriangle, Shield, Share2, Copy, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -40,6 +41,9 @@ export default function ActiveJourney() {
   const [loading, setLoading] = useState(true);
   const [showCheckInDialog, setShowCheckInDialog] = useState(false);
   const [checkInTimer, setCheckInTimer] = useState<NodeJS.Timeout | null>(null);
+  
+  // Live location tracking
+  const { location, error: locationError } = useLocationTracking(id, journey?.status === 'active');
 
   useEffect(() => {
     if (!user || !id) {
@@ -263,6 +267,39 @@ export default function ActiveJourney() {
           {journey.status.replace('_', ' ').toUpperCase()}
         </Badge>
       </div>
+
+      {/* Live Location Status */}
+      {isActive && (
+        <Card className="border-success/50 bg-success/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-success" />
+              Live Location Tracking
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {location ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Active</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your location is being shared with your contacts in real-time
+                </p>
+              </div>
+            ) : locationError ? (
+              <div className="text-sm text-destructive">
+                Location tracking unavailable. Please enable location permissions.
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Acquiring location...
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Shareable Tracking Link */}
       <Card className="border-primary/50 bg-primary/5">

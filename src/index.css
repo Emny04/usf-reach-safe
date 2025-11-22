@@ -8,8 +8,8 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* USF-inspired color palette */
-    --background: 0 0% 100%;
+    /* USF-inspired color palette with green background */
+    --background: 153 40% 96%;
     --foreground: 153 100% 10%;
     
     --card: 0 0% 100%;
@@ -58,7 +58,7 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 153 50% 5%;
+    --background: 153 30% 8%;
     --foreground: 153 20% 95%;
     
     --card: 153 40% 8%;
