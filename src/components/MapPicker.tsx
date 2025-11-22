@@ -26,12 +26,32 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const currentLocationMarkerRef = useRef<L.Circle | null>(null);
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Get user's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+        }
+      );
+    }
+  }, []);
+
+  // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const center = initialCenter || defaultCenter;
+    const center = currentLocation || initialCenter || defaultCenter;
     
     // Initialize map
     const map = L.map(mapContainerRef.current).setView([center.lat, center.lng], 15);
@@ -78,9 +98,34 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
         mapRef.current = null;
       }
     };
-  }, []); // Only initialize once
+  }, [currentLocation, initialCenter, onLocationSelect]);
 
-  // Re-add marker if position is set (for example after parent re-render)
+  // Add/update current location marker
+  useEffect(() => {
+    if (mapRef.current && currentLocation) {
+      // Remove old current location marker if exists
+      if (currentLocationMarkerRef.current) {
+        currentLocationMarkerRef.current.remove();
+      }
+      
+      // Add blue circle for current location
+      currentLocationMarkerRef.current = L.circle(
+        [currentLocation.lat, currentLocation.lng],
+        {
+          color: '#3b82f6',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.2,
+          radius: 50,
+          weight: 2
+        }
+      ).addTo(mapRef.current);
+
+      // Center map on current location
+      mapRef.current.setView([currentLocation.lat, currentLocation.lng], 15);
+    }
+  }, [currentLocation]);
+
+  // Re-add destination marker if position is set (for example after parent re-render)
   useEffect(() => {
     if (mapRef.current && markerPosition && !markerRef.current) {
       markerRef.current = L.marker([markerPosition.lat, markerPosition.lng]).addTo(mapRef.current);
@@ -94,7 +139,14 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
         style={{ height: '400px', width: '100%', borderRadius: '0.5rem' }}
       />
       <p className="text-sm text-muted-foreground mt-2">
-        Click anywhere on the map to set your destination
+        {currentLocation ? (
+          <>
+            <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+            Your location is shown in blue. Click anywhere on the map to set your destination.
+          </>
+        ) : (
+          'Click anywhere on the map to set your destination'
+        )}
       </p>
     </div>
   );

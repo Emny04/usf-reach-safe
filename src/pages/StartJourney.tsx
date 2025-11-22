@@ -37,10 +37,12 @@ export default function StartJourney() {
   const [startType, setStartType] = useState<'current' | 'place' | 'custom'>('current');
   const [startPlaceId, setStartPlaceId] = useState('');
   const [startCustom, setStartCustom] = useState('');
+  const [startCoords, setStartCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [destType, setDestType] = useState<'place' | 'custom' | 'map'>('place');
   const [destPlaceId, setDestPlaceId] = useState('');
   const [destCustom, setDestCustom] = useState('');
   const [destMapAddress, setDestMapAddress] = useState('');
+  const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [calculatedDuration, setCalculatedDuration] = useState<number | null>(null);
   const [calculatingETA, setCalculatingETA] = useState(false);
 
@@ -50,7 +52,22 @@ export default function StartJourney() {
       return;
     }
     fetchData();
-  }, [user, navigate]);
+    
+    // Get user's current location on mount
+    if (navigator.geolocation && startType === 'current') {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setStartCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+        }
+      );
+    }
+  }, [user, navigate, startType]);
 
   const fetchData = async () => {
     try {
@@ -115,77 +132,58 @@ export default function StartJourney() {
 
   // Auto-calculate ETA when both start and destination are set
   useEffect(() => {
-    let origin: string | { lat: number; lng: number } | null = null;
-    let destination: string | { lat: number; lng: number } | null = null;
+    const calculateRouteETA = async () => {
+      let origin: string | { lat: number; lng: number } | null = null;
+      let destination: string | { lat: number; lng: number } | null = null;
 
-    // Get origin - use geolocation for current location
-    if (startType === 'current') {
-      // Get user's current location
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            origin = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            };
-            
-            // Get destination
-            if (destType === 'place' && destPlaceId) {
-              const place = safePlaces.find(p => p.id === destPlaceId);
-              destination = place?.address || '';
-            } else if (destType === 'custom' && destCustom) {
-              destination = destCustom;
-            } else if (destType === 'map' && destMapAddress) {
-              destination = destMapAddress;
+      // Get origin - use stored coords or geolocation for current location
+      if (startType === 'current') {
+        if (startCoords) {
+          origin = startCoords;
+        } else if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const coords = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              };
+              setStartCoords(coords);
+            },
+            (error) => {
+              console.error('Geolocation error:', error);
+              toast.error('Could not get your location');
             }
-            
-            if (destination) {
-              calculateETA(origin!, destination);
-            }
-          },
-          () => {
-            // Fallback to default location if geolocation fails
-            origin = { lat: 28.0587, lng: -82.4139 }; // USF Tampa
-            
-            // Get destination
-            if (destType === 'place' && destPlaceId) {
-              const place = safePlaces.find(p => p.id === destPlaceId);
-              destination = place?.address || '';
-            } else if (destType === 'custom' && destCustom) {
-              destination = destCustom;
-            } else if (destType === 'map' && destMapAddress) {
-              destination = destMapAddress;
-            }
-            
-            if (destination) {
-              calculateETA(origin, destination);
-            }
-          }
-        );
+          );
+          return; // Wait for coords to be set
+        }
+      } else if (startType === 'place' && startPlaceId) {
+        const place = safePlaces.find(p => p.id === startPlaceId);
+        origin = place?.address || '';
+      } else if (startType === 'custom' && startCustom) {
+        origin = startCustom;
       }
-    } else if (startType === 'place' && startPlaceId) {
-      const place = safePlaces.find(p => p.id === startPlaceId);
-      origin = place?.address || '';
-    } else if (startType === 'custom' && startCustom) {
-      origin = startCustom;
-    }
 
-    // Get destination (only when not using current location as start)
-    if (startType !== 'current') {
+      // Get destination - use stored coords when available
       if (destType === 'place' && destPlaceId) {
         const place = safePlaces.find(p => p.id === destPlaceId);
         destination = place?.address || '';
       } else if (destType === 'custom' && destCustom) {
         destination = destCustom;
-      } else if (destType === 'map' && destMapAddress) {
-        destination = destMapAddress;
+      } else if (destType === 'map') {
+        if (destCoords) {
+          destination = destCoords;
+        } else if (destMapAddress) {
+          destination = destMapAddress;
+        }
       }
 
       if (origin && destination) {
-        calculateETA(origin, destination);
+        await calculateETA(origin, destination);
       }
-    }
-  }, [startType, startPlaceId, startCustom, destType, destPlaceId, destCustom, destMapAddress, safePlaces]);
+    };
+
+    calculateRouteETA();
+  }, [startType, startPlaceId, startCustom, startCoords, destType, destPlaceId, destCustom, destMapAddress, destCoords, safePlaces]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -414,7 +412,10 @@ export default function StartJourney() {
             {destType === 'map' && (
               <div className="space-y-2">
                 <MapPicker
-                  onLocationSelect={(address) => setDestMapAddress(address)}
+                  onLocationSelect={(address, lat, lng) => {
+                    setDestMapAddress(address);
+                    setDestCoords({ lat, lng });
+                  }}
                 />
                 {destMapAddress && (
                   <div className="p-3 bg-muted rounded-md">
