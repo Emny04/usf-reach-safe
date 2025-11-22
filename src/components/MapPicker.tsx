@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -26,6 +26,7 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -43,6 +44,9 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
     // Handle map clicks
     map.on('click', async (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng;
+      
+      // Update marker position state
+      setMarkerPosition({ lat, lng });
       
       // Remove old marker if exists
       if (markerRef.current) {
@@ -74,7 +78,14 @@ export const MapPicker = ({ onLocationSelect, initialCenter }: MapPickerProps) =
         mapRef.current = null;
       }
     };
-  }, [initialCenter, onLocationSelect]);
+  }, []); // Only initialize once
+
+  // Re-add marker if position is set (for example after parent re-render)
+  useEffect(() => {
+    if (mapRef.current && markerPosition && !markerRef.current) {
+      markerRef.current = L.marker([markerPosition.lat, markerPosition.lng]).addTo(mapRef.current);
+    }
+  }, [markerPosition]);
 
   return (
     <div className="w-full">
